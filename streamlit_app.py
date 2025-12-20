@@ -20,11 +20,8 @@ def make_hashes(password):
 
 def check_hashes(password, hashed_text):
     if make_hashes(password) == hashed_text:
-        return True
-    return False
+        return 
 
-    }
-    return users
 
 # ==================== PREPROCESSING DATA ====================
 def preprocess_data(df):
