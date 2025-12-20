@@ -18,22 +18,22 @@ MODEL_PATH = "model_rf.pkl"
 ENCODER_PATH = "encoders.pkl"
 
 # ======================================================
-# SESSION STATE
+# SESSION STATE INIT
 # ======================================================
-if "login" not in st.session_state:
-    st.session_state.login = False
-if "role" not in st.session_state:
-    st.session_state.role = ""
-if "guru_data" not in st.session_state:
-    st.session_state.guru_data = None
+for key in [
+    "login", "role", "guru_data",
+    "model", "encoders",
+    "X_train", "X_test", "y_test", "y_pred", "accuracy"
+]:
+    if key not in st.session_state:
+        st.session_state[key] = None
 
 # ======================================================
 # PREPROCESSING
 # ======================================================
-def preprocessing(df):
+def preprocess_and_train(df):
     df = df.copy()
 
-    # Mapping target sesuai dataset
     target_map = {1: "Low", 2: "Low", 3: "Medium", 4: "Medium", 5: "High"}
     df["Impact_Label"] = df["Impact_on_Grades"].map(target_map)
 
@@ -52,14 +52,6 @@ def preprocessing(df):
         X[col] = le.fit_transform(X[col])
         encoders[col] = le
 
-    return X, y, encoders
-
-# ======================================================
-# TRAIN MODEL (HANYA DARI DATA GURU)
-# ======================================================
-def train_model(df):
-    X, y, encoders = preprocessing(df)
-
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
@@ -72,23 +64,24 @@ def train_model(df):
 
     y_pred = model.predict(X_test)
 
-    acc = accuracy_score(y_test, y_pred)
-    cm = confusion_matrix(y_test, y_pred)
-    report = classification_report(y_test, y_pred)
+    # Simpan ke session
+    st.session_state.model = model
+    st.session_state.encoders = encoders
+    st.session_state.X_train = X_train
+    st.session_state.X_test = X_test
+    st.session_state.y_test = y_test
+    st.session_state.y_pred = y_pred
+    st.session_state.accuracy = accuracy_score(y_test, y_pred)
 
     joblib.dump(model, MODEL_PATH)
     joblib.dump(encoders, ENCODER_PATH)
 
-    return X_train, X_test, acc, cm, report
-
 # ======================================================
-# LOGIN PAGE (TANPA PASSWORD)
+# LOGIN PAGE
 # ======================================================
 def login_page():
     st.title("🔐 Login Sistem")
-
     role = st.selectbox("Masuk sebagai", ["Guru", "Siswa"])
-
     if st.button("Masuk"):
         st.session_state.login = True
         st.session_state.role = role
@@ -100,105 +93,103 @@ def login_page():
 def guru_dashboard():
     st.sidebar.title("📊 Menu Guru")
     menu = st.sidebar.radio(
-        "Pilih Menu",
-        ["Upload Dataset", "Data Training", "Data Latih & Uji", "Analisis Klasifikasi", "Evaluasi Model"]
+        "Menu",
+        ["Upload Dataset", "Data Training", "Data Latih & Uji", "Analisis Klasifikasi", "Evaluasi"]
     )
 
-    # ---------------- Upload Dataset ----------------
+    # ---------------- Upload ----------------
     if menu == "Upload Dataset":
-        st.title("📤 Upload Dataset Training (Guru)")
-        uploaded = st.file_uploader("Upload CSV Dataset Siswa", type="csv")
-
-        if uploaded:
-            df = pd.read_csv(uploaded, sep=";")
+        st.title("📤 Upload Dataset Training")
+        file = st.file_uploader("Upload CSV", type="csv")
+        if file:
+            df = pd.read_csv(file, sep=";")
             st.session_state.guru_data = df
-            st.success("Dataset berhasil diupload")
+            preprocess_and_train(df)
+            st.success("Dataset berhasil diproses & model dilatih")
             st.dataframe(df.head())
 
-    # Validasi dataset
+    # Validasi
     if st.session_state.guru_data is None and menu != "Upload Dataset":
         st.warning("Silakan upload dataset terlebih dahulu.")
         return
 
-    df = st.session_state.guru_data
-
     # ---------------- Data Training ----------------
     if menu == "Data Training":
         st.title("📄 Data Training")
-        st.dataframe(df)
+        st.dataframe(st.session_state.guru_data)
 
     # ---------------- Data Latih & Uji ----------------
     elif menu == "Data Latih & Uji":
         st.title("📂 Data Latih & Data Uji")
-        X_train, X_test, _, _, _ = train_model(df)
-        st.write("Jumlah Data Latih:", X_train.shape[0])
-        st.write("Jumlah Data Uji:", X_test.shape[0])
+        st.write("Data Latih:", st.session_state.X_train.shape[0])
+        st.write("Data Uji:", st.session_state.X_test.shape[0])
 
-    # ---------------- Analisis Klasifikasi ----------------
+    # ---------------- Analisis ----------------
     elif menu == "Analisis Klasifikasi":
         st.title("🧠 Analisis Klasifikasi")
-        _, _, acc, _, _ = train_model(df)
-        st.success(f"Akurasi Model Random Forest: **{acc:.2f}**")
+        st.success(
+            f"Akurasi Random Forest: **{st.session_state.accuracy:.2f}**"
+        )
 
-    # ---------------- Evaluasi Model ----------------
-    elif menu == "Evaluasi Model":
+    # ---------------- Evaluasi ----------------
+    elif menu == "Evaluasi":
         st.title("📊 Evaluasi Model")
-        _, _, _, cm, report = train_model(df)
+
+        cm = confusion_matrix(
+            st.session_state.y_test,
+            st.session_state.y_pred
+        )
 
         fig, ax = plt.subplots()
         sns.heatmap(
-            cm,
-            annot=True,
-            fmt="d",
-            cmap="Blues",
+            cm, annot=True, fmt="d",
             xticklabels=["Low", "Medium", "High"],
             yticklabels=["Low", "Medium", "High"],
-            ax=ax
+            cmap="Blues", ax=ax
         )
         ax.set_xlabel("Prediksi")
         ax.set_ylabel("Aktual")
         st.pyplot(fig)
 
-        st.subheader("Classification Report")
-        st.text(report)
+        st.text(
+            classification_report(
+                st.session_state.y_test,
+                st.session_state.y_pred
+            )
+        )
 
     if st.sidebar.button("🚪 Logout"):
-        st.session_state.login = False
-        st.session_state.role = ""
-        st.session_state.guru_data = None
+        for key in st.session_state.keys():
+            st.session_state[key] = None
         st.rerun()
 
 # ======================================================
 # DASHBOARD SISWA
 # ======================================================
 def siswa_dashboard():
-    st.title("🎓 Analisis Tingkat Penggunaan AI (Siswa)")
+    st.title("🎓 Analisis Tingkat Penggunaan AI")
 
-    uploaded = st.file_uploader("Upload Dataset Analisis (CSV)", type="csv")
-
-    if uploaded:
-        data = pd.read_csv(uploaded, sep=";")
-        st.dataframe(data.head())
+    file = st.file_uploader("Upload Dataset Analisis CSV", type="csv")
+    if file:
+        df = pd.read_csv(file, sep=";")
 
         if not os.path.exists(MODEL_PATH):
-            st.error("Model belum tersedia. Guru harus melakukan training terlebih dahulu.")
+            st.error("Model belum tersedia. Guru harus melakukan training.")
             return
 
         model = joblib.load(MODEL_PATH)
         encoders = joblib.load(ENCODER_PATH)
 
         for col, le in encoders.items():
-            data[col] = le.transform(data[col])
+            df[col] = le.transform(df[col])
 
-        prediction = model.predict(data)
-        data["Hasil_Klasifikasi_Tingkat_AI"] = prediction
-
-        st.success("Hasil Analisis Klasifikasi")
-        st.dataframe(data)
+        df["Hasil_Klasifikasi_Tingkat_AI"] = model.predict(df)
+        st.success("Hasil Klasifikasi")
+        st.dataframe(df)
 
     if st.button("🚪 Logout"):
         st.session_state.login = False
-        st.session_state.role = ""
+        st.session_state.role = None
         st.rerun()
 
 # ======================================================
@@ -206,8 +197,7 @@ def siswa_dashboard():
 # ======================================================
 if not st.session_state.login:
     login_page()
+elif st.session_state.role == "Guru":
+    guru_dashboard()
 else:
-    if st.session_state.role == "Guru":
-        guru_dashboard()
-    elif st.session_state.role == "Siswa":
-        siswa_dashboard()
+    siswa_dashboard()
