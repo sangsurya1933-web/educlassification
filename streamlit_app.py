@@ -23,11 +23,6 @@ def check_hashes(password, hashed_text):
         return True
     return False
 
-def create_user_db():
-    """Membuat database user default"""
-    users = {
-        'guru': make_hashes('guru123'),
-        'siswa': make_hashes('siswa123')
     }
     return users
 
