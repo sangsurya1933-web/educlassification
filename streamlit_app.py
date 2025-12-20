@@ -33,57 +33,38 @@ def classify_ai_usage(row):
     else:
         return 2  # Heavy User
 
-def prepare_dataset_from_text(text_data):
-    """Mempersiapkan dataset dari text yang diberikan"""
-    try:
-        # Parsing data text menjadi DataFrame
-        lines = text_data.strip().split('\n')
-        
-        # Ambil header
-        header = lines[0].split(':')
-        
-        # Parse data
-        data_rows = []
-        for line in lines[1:]:
-            if line.strip():
-                values = line.split()
-                if len(values) >= 6:  # Minimal memiliki kolom yang diperlukan
-                    data_rows.append(values)
-        
-        # Buat DataFrame
-        df = pd.DataFrame(data_rows)
-        
-        # Beri nama kolom berdasarkan data
-        if len(df.columns) >= 6:
-            df.columns = ['Student_Name', 'College', 'Stream', 'Year', 'AI_Tools', 'Daily_Usage', 
-                         'Use_Cases', 'Trust_Level', 'Impact_Score'][:len(df.columns)]
-        
-        # Konversi tipe data
-        df['Year'] = pd.to_numeric(df['Year'], errors='coerce')
-        df['Daily_Usage'] = pd.to_numeric(df['Daily_Usage'], errors='coerce')
-        df['Trust_Level'] = pd.to_numeric(df['Trust_Level'], errors='coerce')
-        df['Impact_Score'] = pd.to_numeric(df['Impact_Score'], errors='coerce')
-        
-        # Buat kolom target (klasifikasi penggunaan AI)
-        df['AI_User_Class'] = df.apply(classify_ai_usage, axis=1)
-        
-        # Tambah fitur-fitur tambahan
-        df['Multiple_Tools'] = df['AI_Tools'].apply(lambda x: 1 if ',' in str(x) else 0)
-        df['Usage_per_Year'] = df['Daily_Usage'] / df['Year'].clip(lower=1)
-        
-        return df
-        
-    except Exception as e:
-        st.error(f"Error preparing dataset: {str(e)}")
-        return None
+def create_sample_dataset():
+    """Membuat dataset contoh"""
+    np.random.seed(42)
+    n_samples = 300
+    
+    data = {
+        'Student_ID': [f'STD{i:03d}' for i in range(1, n_samples+1)],
+        'College': np.random.choice(['Engineering', 'Commerce', 'Science', 'Arts', 'Medical'], n_samples),
+        'Stream': np.random.choice(['Tech', 'Business', 'Science', 'Humanities', 'Health'], n_samples),
+        'Year': np.random.randint(1, 5, n_samples),
+        'AI_Tools': np.random.choice(['ChatGPT', 'Gemini', 'Copilot', 'Multiple'], n_samples),
+        'Daily_Usage': np.random.randint(1, 50, n_samples),
+        'Use_Cases': np.random.choice(['Assignments', 'Exam Prep', 'Research', 'Projects'], n_samples),
+        'Trust_Level': np.random.randint(1, 6, n_samples),
+        'Impact_Score': np.random.randint(-3, 4, n_samples)
+    }
+    
+    df = pd.DataFrame(data)
+    df['AI_User_Class'] = df.apply(classify_ai_usage, axis=1)
+    
+    # Tambah fitur engineering
+    df['Multiple_Tools'] = df['AI_Tools'].apply(lambda x: 1 if x == 'Multiple' else 0)
+    df['Usage_Per_Year'] = df['Daily_Usage'] / df['Year']
+    
+    return df
 
 def preprocess_data(df):
     """Fungsi untuk preprocessing data lengkap"""
-    
     df_processed = df.copy()
     
-    # Drop kolom yang tidak diperlukan
-    cols_to_drop = ['Student_Name']
+    # Drop kolom yang tidak diperlukan untuk modeling
+    cols_to_drop = ['Student_ID']
     for col in cols_to_drop:
         if col in df_processed.columns:
             df_processed = df_processed.drop(columns=[col])
@@ -163,15 +144,15 @@ def perform_random_forest_analysis(X, y, test_size=0.3, random_state=42, n_estim
     }).sort_values('importance', ascending=False)
     
     # Hitung metrics per class
-    precision_per_class = precision_score(y_test, y_pred, average=None)
-    recall_per_class = recall_score(y_test, y_pred, average=None)
-    f1_per_class = f1_score(y_test, y_pred, average=None)
+    precision_per_class = precision_score(y_test, y_pred, average=None, zero_division=0)
+    recall_per_class = recall_score(y_test, y_pred, average=None, zero_division=0)
+    f1_per_class = f1_score(y_test, y_pred, average=None, zero_division=0)
     
     return {
         'model': rf_model,
         'scaler': scaler,
-        'X_train': X_train_scaled,
-        'X_test': X_test_scaled,
+        'X_train': X_train,
+        'X_test': X_test,
         'y_train': y_train,
         'y_test': y_test,
         'y_pred': y_pred,
@@ -297,99 +278,91 @@ def plot_analysis_results(analysis_results):
     return fig
 
 # ==================== EKSPOR DATA ====================
-def export_results_to_csv(df, analysis_results, label_encoders, prefix='ai_analysis'):
+def export_to_csv(df, results, export_folder='exported_results'):
     """Ekspor hasil analisis ke CSV"""
-    
-    # Buat folder ekspor jika belum ada
-    export_folder = 'exported_results'
     if not os.path.exists(export_folder):
         os.makedirs(export_folder)
     
-    results = analysis_results
-    
     # 1. Ekspor dataset dengan klasifikasi
-    df_with_class = df.copy()
-    df_with_class['AI_User_Class_Label'] = df_with_class['AI_User_Class'].map(USER_CLASSES)
-    df_with_class.to_csv(f'{export_folder}/{prefix}_classified_data.csv', index=False)
+    df_export = df.copy()
+    df_export['AI_User_Class_Label'] = df_export['AI_User_Class'].map(USER_CLASSES)
+    df_export.to_csv(f'{export_folder}/classified_data.csv', index=False)
     
-    # 2. Ekspor hasil prediksi
-    predictions_df = pd.DataFrame({
-        'Actual_Class': results['y_test'],
-        'Actual_Label': [USER_CLASSES[i] for i in results['y_test']],
-        'Predicted_Class': results['y_pred'],
-        'Predicted_Label': [USER_CLASSES[i] for i in results['y_pred']],
-        'Is_Correct': results['y_test'] == results['y_pred']
-    })
-    predictions_df.to_csv(f'{export_folder}/{prefix}_predictions.csv', index=False)
+    # 2. Ekspor feature importance
+    results['feature_importance'].to_csv(f'{export_folder}/feature_importance.csv', index=False)
     
-    # 3. Ekspor feature importance
-    results['feature_importance'].to_csv(f'{export_folder}/{prefix}_feature_importance.csv', index=False)
-    
-    # 4. Ekspor classification report
+    # 3. Ekspor classification report
     class_report_df = pd.DataFrame(results['classification_report']).transpose()
-    class_report_df.to_csv(f'{export_folder}/{prefix}_classification_report.csv')
+    class_report_df.to_csv(f'{export_folder}/classification_report.csv')
     
-    # 5. Ekspor confusion matrix
+    # 4. Ekspor confusion matrix
     cm_df = pd.DataFrame(results['confusion_matrix'], 
                         columns=[USER_CLASSES[i] for i in range(results['confusion_matrix'].shape[1])],
                         index=[USER_CLASSES[i] for i in range(results['confusion_matrix'].shape[0])])
-    cm_df.to_csv(f'{export_folder}/{prefix}_confusion_matrix.csv')
-    
-    # 6. Ekspor model metrics
-    metrics = pd.DataFrame({
-        'Metric': ['Train Accuracy', 'Test Accuracy', 'Macro Precision', 'Macro Recall', 'Macro F1'],
-        'Value': [
-            results['accuracy_train'],
-            results['accuracy_test'],
-            np.mean(results['precision_per_class']),
-            np.mean(results['recall_per_class']),
-            np.mean(results['f1_per_class'])
-        ]
-    })
-    metrics.to_csv(f'{export_folder}/{prefix}_model_metrics.csv', index=False)
-    
-    # 7. Ekspor statistik per kelas
-    class_stats = pd.DataFrame({
-        'Class': [USER_CLASSES[i] for i in range(len(USER_CLASSES))],
-        'Precision': results['precision_per_class'],
-        'Recall': results['recall_per_class'],
-        'F1_Score': results['f1_per_class']
-    })
-    class_stats.to_csv(f'{export_folder}/{prefix}_class_statistics.csv', index=False)
+    cm_df.to_csv(f'{export_folder}/confusion_matrix.csv')
     
     return export_folder
 
 # ==================== PREDIKSI INDIVIDU ====================
-def predict_individual_user(model, scaler, input_data, feature_names):
-    """Prediksi klasifikasi untuk pengguna individu"""
+def create_prediction_form():
+    """Membuat form untuk prediksi individu"""
+    with st.form("prediction_form"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            daily_usage = st.slider("Daily Usage (jam/minggu)", 1, 50, 15)
+            year = st.selectbox("Tahun Studi", [1, 2, 3, 4])
+            trust_level = st.slider("Trust Level (1-5)", 1, 5, 3)
+        
+        with col2:
+            ai_tools = st.selectbox("AI Tools", ["ChatGPT", "Gemini", "Copilot", "Multiple"])
+            use_cases = st.selectbox("Use Cases", ["Assignments", "Exam Prep", "Research", "Projects"])
+            college = st.selectbox("College", ["Engineering", "Commerce", "Science", "Arts", "Medical"])
+        
+        submitted = st.form_submit_button("🔮 Prediksi Klasifikasi")
+        
+        if submitted:
+            return {
+                'Daily_Usage': daily_usage,
+                'Year': year,
+                'Trust_Level': trust_level,
+                'AI_Tools': ai_tools,
+                'Use_Cases': use_cases,
+                'College': college,
+                'Multiple_Tools': 1 if ai_tools == "Multiple" else 0,
+                'Usage_Per_Year': daily_usage / year
+            }
+    return None
+
+def predict_user_class(input_data, model, scaler, X_columns):
+    """Prediksi kelas pengguna"""
     try:
         # Buat DataFrame dari input
         input_df = pd.DataFrame([input_data])
         
-        # Pastikan urutan kolom sama dengan training
-        for col in feature_names:
+        # Encoding untuk variabel kategorikal
+        for col in ['AI_Tools', 'Use_Cases', 'College']:
+            if col in input_df.columns:
+                # Encoding sederhana (dalam aplikasi nyata gunakan encoder yang sama)
+                input_df[col] = pd.factorize(input_df[col])[0]
+        
+        # Pastikan semua kolom ada
+        for col in X_columns:
             if col not in input_df.columns:
                 input_df[col] = 0
         
-        input_df = input_df[feature_names]
+        input_df = input_df[X_columns]
         
-        # Scale data
+        # Scale dan prediksi
         input_scaled = scaler.transform(input_df)
-        
-        # Prediksi
         prediction = model.predict(input_scaled)[0]
-        probability = model.predict_proba(input_scaled)[0]
+        probabilities = model.predict_proba(input_scaled)[0]
         
-        return {
-            'class': prediction,
-            'label': USER_CLASSES[prediction],
-            'probabilities': {
-                USER_CLASSES[i]: f"{prob*100:.2f}%" 
-                for i, prob in enumerate(probability)
-            }
-        }
+        return prediction, probabilities
+        
     except Exception as e:
-        return {'error': str(e)}
+        st.error(f"Error dalam prediksi: {str(e)}")
+        return None, None
 
 # ==================== MAIN APPLICATION ====================
 def main():
@@ -404,92 +377,33 @@ def main():
     st.markdown("---")
     
     # Inisialisasi session state
+    if 'df' not in st.session_state:
+        st.session_state.df = create_sample_dataset()
     if 'analysis_results' not in st.session_state:
         st.session_state.analysis_results = None
-    if 'df' not in st.session_state:
-        st.session_state.df = None
-    if 'label_encoders' not in st.session_state:
-        st.session_state.label_encoders = None
     
     # Sidebar
     with st.sidebar:
         st.header("⚙️ Konfigurasi")
         
-        # Input data
-        st.subheader("1. Input Data")
-        data_option = st.radio(
-            "Pilih sumber data:",
-            ["Upload CSV", "Tempel Data Text", "Gunakan Contoh Data"]
-        )
-        
-        if data_option == "Upload CSV":
-            uploaded_file = st.file_uploader("📁 Upload dataset CSV", type=['csv'])
-            
-            if uploaded_file is not None:
-                try:
-                    df = pd.read_csv(uploaded_file)
-                    
-                    # Cek apakah ada kolom Daily_Usage
-                    if 'Daily_Usage' not in df.columns:
-                        st.error("Dataset harus memiliki kolom 'Daily_Usage'!")
-                    else:
-                        # Tambah kolom klasifikasi
-                        df['AI_User_Class'] = df.apply(classify_ai_usage, axis=1)
-                        st.session_state.df = df
-                        st.success(f"✅ Dataset dimuat: {len(df)} baris")
-                        
-                except Exception as e:
-                    st.error(f"Error membaca file: {str(e)}")
-        
-        elif data_option == "Tempel Data Text":
-            text_data = st.text_area("Tempel data text (format tab atau spasi):", height=200)
-            
-            if st.button("Proses Data Text", type="primary"):
-                if text_data:
-                    with st.spinner("Memproses data text..."):
-                        df = prepare_dataset_from_text(text_data)
-                        if df is not None:
-                            st.session_state.df = df
-                            st.success(f"✅ Dataset diproses: {len(df)} baris")
-        
-        else:  # Contoh data
-            if st.button("Generate Contoh Data", type="primary"):
-                # Buat data contoh
-                np.random.seed(42)
-                n_samples = 300
-                
-                data = {
-                    'Student_Name': [f'Student_{i}' for i in range(n_samples)],
-                    'College': np.random.choice(['Engineering', 'Commerce', 'Science', 'Arts', 'Medical'], n_samples),
-                    'Stream': np.random.choice(['Tech', 'Business', 'Science', 'Humanities', 'Health'], n_samples),
-                    'Year': np.random.randint(1, 5, n_samples),
-                    'AI_Tools': np.random.choice(['ChatGPT', 'Gemini', 'Copilot', 'Multiple'], n_samples),
-                    'Daily_Usage': np.random.randint(1, 50, n_samples),
-                    'Use_Cases': np.random.choice(['Assignments', 'Exam Prep', 'Research', 'Projects'], n_samples),
-                    'Trust_Level': np.random.randint(1, 6, n_samples),
-                    'Impact_Score': np.random.randint(-3, 4, n_samples)
-                }
-                
-                df = pd.DataFrame(data)
-                df['AI_User_Class'] = df.apply(classify_ai_usage, axis=1)
-                st.session_state.df = df
-                st.success(f"✅ Contoh data dibuat: {len(df)} baris")
+        st.subheader("Dataset")
+        if st.button("🔄 Generate Dataset Baru", type="secondary"):
+            st.session_state.df = create_sample_dataset()
+            st.session_state.analysis_results = None
+            st.success("Dataset baru dibuat!")
         
         st.markdown("---")
-        st.subheader("2. Parameter Model")
+        st.subheader("Parameter Model")
         
         n_estimators = st.slider("Jumlah Estimator", 50, 500, 100)
         max_depth = st.slider("Max Depth", 5, 30, 10)
         test_size = st.slider("Test Size (%)", 10, 40, 30) / 100
         
         st.markdown("---")
-        st.subheader("3. Aksi")
+        st.subheader("Aksi")
         
         if st.button("🚀 Jalankan Analisis", type="primary", use_container_width=True):
-            if st.session_state.df is not None:
-                st.session_state.run_analysis = True
-            else:
-                st.error("⚠️ Mohon muat dataset terlebih dahulu!")
+            st.session_state.run_analysis = True
     
     # Tab utama
     tab1, tab2, tab3, tab4 = st.tabs(["📊 Dataset", "📈 Analisis", "🎯 Prediksi", "📤 Ekspor"])
@@ -498,76 +412,71 @@ def main():
     with tab1:
         st.header("Dataset & Klasifikasi")
         
-        if st.session_state.df is not None:
-            df = st.session_state.df
+        df = st.session_state.df
+        
+        # Tampilkan informasi dataset
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total Siswa", len(df))
+        with col2:
+            light_users = len(df[df['AI_User_Class'] == 0])
+            st.metric("Light Users", light_users)
+        with col3:
+            moderate_users = len(df[df['AI_User_Class'] == 1])
+            st.metric("Moderate Users", moderate_users)
+        with col4:
+            heavy_users = len(df[df['AI_User_Class'] == 2])
+            st.metric("Heavy Users", heavy_users)
+        
+        # Visualisasi distribusi
+        st.subheader("Distribusi Klasifikasi Pengguna AI")
+        fig_dist = plot_user_class_distribution(df)
+        st.pyplot(fig_dist)
+        
+        # Tampilkan kriteria klasifikasi
+        with st.expander("📋 Kriteria Klasifikasi", expanded=True):
+            st.markdown("""
+            ### **Klasifikasi Berdasarkan Daily Usage (jam/minggu):**
             
-            # Tampilkan informasi dataset
-            col1, col2, col3 = st.columns(3)
+            | Kategori | Daily Usage | Deskripsi |
+            |----------|-------------|-----------|
+            | **Light User** | ≤ 10 jam | Penggunaan terbatas |
+            | **Moderate User** | 11-30 jam | Penggunaan reguler |
+            | **Heavy User** | > 30 jam | Penggunaan intensif |
             
-            with col1:
-                st.metric("Total Siswa", len(df))
-            with col2:
-                light_users = len(df[df['AI_User_Class'] == 0])
-                st.metric("Light Users", light_users)
-            with col3:
-                heavy_users = len(df[df['AI_User_Class'] == 2])
-                st.metric("Heavy Users", heavy_users)
-            
-            # Visualisasi distribusi
-            st.subheader("Distribusi Klasifikasi Pengguna AI")
-            fig_dist = plot_user_class_distribution(df)
-            st.pyplot(fig_dist)
-            
-            # Tampilkan kriteria klasifikasi
-            with st.expander("📋 Kriteria Klasifikasi", expanded=True):
-                st.markdown("""
-                | Kategori | Daily Usage | Deskripsi |
-                |----------|-------------|-----------|
-                | **Light User** | ≤ 10 jam/minggu | Penggunaan terbatas, hanya untuk tugas tertentu |
-                | **Moderate User** | 11-30 jam/minggu | Penggunaan reguler untuk berbagai aktivitas akademik |
-                | **Heavy User** | > 30 jam/minggu | Penggunaan intensif, hampir setiap hari untuk banyak tujuan |
-                """)
-            
-            # Tampilkan data
-            st.subheader("Preview Data")
-            
-            # Pilih kolom untuk ditampilkan
-            display_cols = ['Student_Name', 'College', 'Year', 'AI_Tools', 'Daily_Usage', 
-                          'AI_User_Class']
-            
-            df_display = df[display_cols].copy()
-            df_display['AI_User_Class'] = df_display['AI_User_Class'].map(USER_CLASSES)
-            
-            # Filter berdasarkan kelas
-            filter_class = st.selectbox("Filter berdasarkan kelas:", 
-                                       ["Semua", "Light User", "Moderate User", "Heavy User"])
-            
-            if filter_class != "Semua":
-                class_map = {v: k for k, v in USER_CLASSES.items()}
-                df_display = df_display[df_display['AI_User_Class'] == filter_class]
-            
-            st.dataframe(df_display, use_container_width=True, height=300)
-            
-            # Statistik deskriptif
-            with st.expander("📊 Statistik Deskriptif"):
-                st.dataframe(df.describe(), use_container_width=True)
-                
-        else:
-            st.info("👈 Silakan pilih sumber data di sidebar")
+            ### **Karakteristik:**
+            - **Light User**: Menggunakan AI untuk tugas spesifik
+            - **Moderate User**: Menggunakan AI secara rutin untuk berbagai kebutuhan
+            - **Heavy User**: Bergantung pada AI untuk hampir semua aktivitas akademik
+            """)
+        
+        # Tampilkan data
+        st.subheader("Preview Data")
+        df_display = df.copy()
+        df_display['AI_User_Class'] = df_display['AI_User_Class'].map(USER_CLASSES)
+        
+        # Filter
+        filter_option = st.selectbox(
+            "Filter berdasarkan kelas:",
+            ["Semua", "Light User", "Moderate User", "Heavy User"]
+        )
+        
+        if filter_option != "Semua":
+            df_display = df_display[df_display['AI_User_Class'] == filter_option]
+        
+        st.dataframe(df_display, use_container_width=True, height=300)
     
     # TAB 2: Analisis
     with tab2:
         st.header("Analisis Random Forest")
         
-        if st.session_state.df is not None and hasattr(st.session_state, 'run_analysis'):
+        if hasattr(st.session_state, 'run_analysis'):
             with st.spinner("Melakukan analisis dengan Random Forest..."):
                 # Preprocess data
                 X, y, label_encoders = preprocess_data(st.session_state.df)
                 
                 if X is not None:
-                    # Simpan ke session state
-                    st.session_state.label_encoders = label_encoders
-                    
                     # Lakukan analisis
                     analysis_results = perform_random_forest_analysis(
                         X, y, 
@@ -578,7 +487,8 @@ def main():
                     
                     # Simpan hasil
                     st.session_state.analysis_results = analysis_results
-                    st.session_state.X = X
+                    st.session_state.X_columns = X.columns
+                    st.session_state.label_encoders = label_encoders
                     
                     # Tampilkan hasil
                     st.success("✅ Analisis selesai!")
@@ -600,61 +510,8 @@ def main():
                     fig_analysis = plot_analysis_results(analysis_results)
                     st.pyplot(fig_analysis)
                     
-                    # Interpretasi hasil
-                    st.subheader("📝 Interpretasi Hasil")
-                    
-                    col_int1, col_int2 = st.columns(2)
-                    
-                    with col_int1:
-                        st.markdown("""
-                        **🎯 Kinerja Model:**
-                        - Model mencapai akurasi **{:.2%}** pada data testing
-                        - **Light User**: Precision {:.2%}, Recall {:.2%}
-                        - **Moderate User**: Precision {:.2%}, Recall {:.2%}
-                        - **Heavy User**: Precision {:.2%}, Recall {:.2%}
-                        
-                        **📊 Insight:**
-                        - Model paling baik dalam mengklasifikasikan **{}**
-                        - Fitur paling penting: **{}**
-                        """.format(
-                            analysis_results['accuracy_test'],
-                            analysis_results['precision_per_class'][0],
-                            analysis_results['recall_per_class'][0],
-                            analysis_results['precision_per_class'][1],
-                            analysis_results['recall_per_class'][1],
-                            analysis_results['precision_per_class'][2],
-                            analysis_results['recall_per_class'][2],
-                            USER_CLASSES[np.argmax(analysis_results['f1_per_class'])],
-                            analysis_results['feature_importance'].iloc[0]['feature']
-                        ))
-                    
-                    with col_int2:
-                        st.markdown("""
-                        **💡 Rekomendasi:**
-                        
-                        1. **Untuk Light Users:**
-                           - Tingkatkan penggunaan AI secara bertahap
-                           - Fokus pada tools yang mudah digunakan
-                        
-                        2. **Untuk Moderate Users:**
-                           - Diversifikasi penggunaan tools
-                           - Optimalkan untuk produktivitas
-                        
-                        3. **Untuk Heavy Users:**
-                           - Evaluasi efektivitas penggunaan
-                           - Cegah ketergantungan berlebihan
-                        
-                        **🔧 Improvement:**
-                        - {} fitur menyumbang 80% importance
-                        - Pertimbangkan feature engineering untuk fitur lemah
-                        """.format(
-                            len(analysis_results['feature_importance'][
-                                analysis_results['feature_importance']['importance'].cumsum() <= 0.8
-                            ])
-                        ))
-                    
                     # Feature importance detail
-                    with st.expander("📋 Detail Feature Importance", expanded=False):
+                    with st.expander("📋 Detail Feature Importance"):
                         st.dataframe(analysis_results['feature_importance'], use_container_width=True)
                         
                         # Cumulative importance
@@ -678,65 +535,38 @@ def main():
         if st.session_state.analysis_results is not None:
             st.success("Model siap untuk prediksi!")
             
-            # Form input untuk prediksi
-            col1, col2 = st.columns(2)
+            # Form input
+            input_data = create_prediction_form()
             
-            with col1:
-                daily_usage = st.slider("Daily Usage (jam/minggu)", 1, 50, 15)
-                year = st.selectbox("Tahun Studi", [1, 2, 3, 4])
-                trust_level = st.slider("Trust Level (1-5)", 1, 5, 3)
-            
-            with col2:
-                ai_tools = st.selectbox("AI Tools", ["ChatGPT", "Gemini", "Copilot", "Multiple"])
-                use_cases = st.selectbox("Use Cases", ["Assignments", "Exam Prep", "Research", "Projects"])
-                college = st.selectbox("College", ["Engineering", "Commerce", "Science", "Arts", "Medical"])
-            
-            # Fitur tambahan
-            multiple_tools = 1 if ai_tools == "Multiple" else 0
-            usage_per_year = daily_usage / year if year > 0 else daily_usage
-            
-            if st.button("🔮 Prediksi Klasifikasi", type="primary"):
-                # Siapkan input data
-                input_data = {
-                    'Daily_Usage': daily_usage,
-                    'Year': year,
-                    'Trust_Level': trust_level,
-                    'AI_Tools': ai_tools,
-                    'Use_Cases': use_cases,
-                    'College': college,
-                    'Multiple_Tools': multiple_tools,
-                    'Usage_per_Year': usage_per_year
-                }
-                
+            if input_data:
                 # Prediksi
-                model = st.session_state.analysis_results['model']
-                scaler = st.session_state.analysis_results['scaler']
-                
-                result = predict_individual_user(
-                    model, scaler, input_data, st.session_state.X.columns
+                prediction, probabilities = predict_user_class(
+                    input_data,
+                    st.session_state.analysis_results['model'],
+                    st.session_state.analysis_results['scaler'],
+                    st.session_state.X_columns
                 )
                 
-                if 'error' not in result:
+                if prediction is not None:
                     # Tampilkan hasil
                     st.subheader("Hasil Prediksi")
                     
-                    col_res1, col_res2, col_res3 = st.columns(3)
+                    col1, col2, col3 = st.columns(3)
                     
-                    with col_res1:
-                        st.metric("Klasifikasi", result['label'])
-                    
-                    with col_res2:
-                        st.metric("Confidence", result['probabilities'][result['label']])
-                    
-                    with col_res3:
-                        st.metric("Daily Usage", f"{daily_usage} jam/minggu")
+                    with col1:
+                        st.metric("Klasifikasi", USER_CLASSES[prediction])
+                    with col2:
+                        prob_value = probabilities[prediction] * 100
+                        st.metric("Confidence", f"{prob_value:.1f}%")
+                    with col3:
+                        st.metric("Daily Usage", f"{input_data['Daily_Usage']} jam/minggu")
                     
                     # Probabilitas detail
                     st.subheader("Probabilitas Klasifikasi")
                     
                     prob_df = pd.DataFrame({
-                        'Kelas': list(result['probabilities'].keys()),
-                        'Probabilitas': list(result['probabilities'].values())
+                        'Kelas': [USER_CLASSES[i] for i in range(len(probabilities))],
+                        'Probabilitas': [f"{p*100:.1f}%" for p in probabilities]
                     })
                     
                     # Visualisasi probabilitas
@@ -756,32 +586,30 @@ def main():
                     
                     st.pyplot(fig_prob)
                     
-                    # Rekomendasi berdasarkan klasifikasi
+                    # Rekomendasi
                     st.subheader("Rekomendasi")
                     
-                    if result['class'] == 0:  # Light User
+                    if prediction == 0:  # Light User
                         st.info("""
                         **🎯 Anda termasuk Light User:**
-                        - **Saran**: Coba tingkatkan penggunaan AI secara bertahap
-                        - **Tools**: Mulai dengan ChatGPT atau Gemini untuk tugas sederhana
-                        - **Waktu**: Tambah 2-3 jam/minggu untuk eksplorasi
+                        - **Saran**: Tingkatkan penggunaan AI secara bertahap
+                        - **Tips**: Mulai dengan 2-3 jam tambahan per minggu
+                        - **Tools**: Coba ChatGPT untuk tugas menulis, Gemini untuk research
                         """)
-                    elif result['class'] == 1:  # Moderate User
+                    elif prediction == 1:  # Moderate User
                         st.success("""
                         **🎯 Anda termasuk Moderate User:**
                         - **Status**: Penggunaan optimal, pertahankan!
                         - **Tips**: Diversifikasi tools untuk kebutuhan berbeda
-                        - **Goal**: Optimalkan untuk produktivitas maksimal
+                        - **Goal**: Optimalkan produktivitas dengan workflow yang efisien
                         """)
                     else:  # Heavy User
                         st.warning("""
                         **🎯 Anda termasuk Heavy User:**
-                        - **Perhatian**: Pastikan penggunaan tetap produktif
-                        - **Evaluasi**: Tinjau efektivitas penggunaan secara berkala
-                        - **Balance**: Jaga keseimbangan dengan metode belajar tradisional
+                        - **Perhatian**: Evaluasi efektivitas penggunaan
+                        - **Tips**: Pastikan AI meningkatkan kualitas belajar, bukan hanya kuantitas
+                        - **Balance**: Kombinasikan dengan metode belajar tradisional
                         """)
-                else:
-                    st.error(f"Error dalam prediksi: {result['error']}")
         else:
             st.info("👈 Jalankan analisis terlebih dahulu untuk menggunakan fitur prediksi")
     
@@ -795,11 +623,9 @@ def main():
             # Tombol ekspor
             if st.button("📥 Ekspor Semua Hasil ke CSV", type="primary"):
                 with st.spinner("Mengekspor hasil..."):
-                    export_folder = export_results_to_csv(
+                    export_folder = export_to_csv(
                         st.session_state.df,
-                        st.session_state.analysis_results,
-                        st.session_state.label_encoders,
-                        prefix="ai_user_classification"
+                        st.session_state.analysis_results
                     )
                     
                     st.success(f"✅ Hasil berhasil diekspor ke folder: `{export_folder}/`")
@@ -808,8 +634,37 @@ def main():
                     st.subheader("File yang Telah Diekspor")
                     
                     files = os.listdir(export_folder)
-                    ai_files = [f for f in files if f.startswith("ai_user_classification")]
                     
-                    for file in ai_files:
-                        file_path = os.path.join(export_folder, file)
-                        file_size = os.path.getsize(file_path
+                    for file in files:
+                        if file.endswith('.csv'):
+                            col1, col2, col3 = st.columns([3, 1, 1])
+                            
+                            with col1:
+                                st.write(f"`{file}`")
+                            with col2:
+                                file_path = os.path.join(export_folder, file)
+                                file_size = os.path.getsize(file_path) / 1024
+                                st.write(f"{file_size:.1f} KB")
+                            with col3:
+                                with open(file_path, 'rb') as f:
+                                    st.download_button(
+                                        label="📥",
+                                        data=f,
+                                        file_name=file,
+                                        mime="text/csv",
+                                        key=f"download_{file}"
+                                    )
+        else:
+            st.info("👈 Jalankan analisis terlebih dahulu untuk mengekspor hasil")
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; color: #666; font-size: 0.9em;'>
+        <p><b>Analisis Klasifikasi Pengguna AI</b> | Random Forest Classification</p>
+        <p>Light User • Moderate User • Heavy User</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main()
