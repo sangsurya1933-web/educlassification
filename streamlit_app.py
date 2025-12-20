@@ -1,42 +1,47 @@
 import streamlit as st
 import pandas as pd
 import joblib
-import os
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 import matplotlib.pyplot as plt
 import seaborn as sns
+import os
 
-# =====================================================
+# ======================================================
 # CONFIG
-# =====================================================
-st.set_page_config(
-    page_title="Analisis AI vs Performa Akademik",
-    layout="wide"
-)
+# ======================================================
+st.set_page_config(page_title="Analisis Penggunaan AI", layout="wide")
 
 DATA_PATH = "Students tabel.csv"
 MODEL_PATH = "model_rf.pkl"
 ENCODER_PATH = "encoders.pkl"
 
-# =====================================================
+# ======================================================
+# SESSION STATE
+# ======================================================
+if "login" not in st.session_state:
+    st.session_state.login = False
+if "role" not in st.session_state:
+    st.session_state.role = ""
+
+# ======================================================
 # LOAD DATA
-# =====================================================
+# ======================================================
 @st.cache_data
 def load_data():
     return pd.read_csv(DATA_PATH, sep=";")
 
 df = load_data()
 
-# =====================================================
+# ======================================================
 # PREPROCESSING
-# =====================================================
+# ======================================================
 def preprocessing(df):
     df = df.copy()
 
-    target_map = {1: "Low", 2: "Low", 3: "Medium", 4: "Medium", 5: "High"}
+    target_map = {1:"Low", 2:"Low", 3:"Medium", 4:"Medium", 5:"High"}
     df["Impact_Label"] = df["Impact_on_Grades"].map(target_map)
 
     features = [
@@ -56,9 +61,9 @@ def preprocessing(df):
 
     return X, y, encoders
 
-# =====================================================
+# ======================================================
 # TRAIN MODEL
-# =====================================================
+# ======================================================
 def train_model():
     X, y, encoders = preprocessing(df)
 
@@ -66,10 +71,7 @@ def train_model():
         X, y, test_size=0.2, random_state=42
     )
 
-    model = RandomForestClassifier(
-        n_estimators=200,
-        random_state=42
-    )
+    model = RandomForestClassifier(n_estimators=200, random_state=42)
     model.fit(X_train, y_train)
 
     y_pred = model.predict(X_test)
@@ -81,107 +83,114 @@ def train_model():
     joblib.dump(model, MODEL_PATH)
     joblib.dump(encoders, ENCODER_PATH)
 
-    return acc, cm, report
+    return X_train, X_test, acc, cm, report
 
-# =====================================================
-# SIDEBAR MENU
-# =====================================================
-menu = st.sidebar.radio(
-    "📌 Menu Dashboard",
-    ["🏠 Beranda", "📊 Dashboard Guru", "🎓 Dashboard Siswa"]
-)
+# ======================================================
+# LOGIN PAGE
+# ======================================================
+def login_page():
+    st.title("🔐 Login Sistem")
 
-# =====================================================
-# BERANDA
-# =====================================================
-if menu == "🏠 Beranda":
-    st.title("📘 Analisis Penggunaan AI terhadap Performa Akademik Siswa")
+    role = st.selectbox("Login sebagai", ["Guru", "Siswa"])
+    user = st.text_input("Username")
+    pw = st.text_input("Password", type="password")
 
-    st.markdown("""
-    **Judul Penelitian:**  
-    *Analisis Tingkat Penggunaan Artificial Intelligence (AI) terhadap Performa Akademik Siswa  
-    Menggunakan Algoritma Random Forest*
+    if st.button("Login"):
+        if role == "Guru" and user == "guru" and pw == "guru123":
+            st.session_state.login = True
+            st.session_state.role = "Guru"
+            st.rerun()
+        elif role == "Siswa" and user == "siswa" and pw == "siswa123":
+            st.session_state.login = True
+            st.session_state.role = "Siswa"
+            st.rerun()
+        else:
+            st.error("Username atau Password salah")
 
-    **Fungsi Sistem:**
-    - Melatih model Random Forest
-    - Menampilkan hasil evaluasi klasifikasi
-    - Melakukan prediksi performa akademik siswa
-    """)
-
-    st.subheader("📄 Dataset")
-    st.dataframe(df.head())
-
-# =====================================================
+# ======================================================
 # DASHBOARD GURU
-# =====================================================
-elif menu == "📊 Dashboard Guru":
-    st.title("📊 Dashboard Guru")
+# ======================================================
+def guru_dashboard():
+    st.sidebar.title("📊 Menu Guru")
+    menu = st.sidebar.radio(
+        "Pilih Menu",
+        ["Data Training", "Data Latih & Uji", "Analisis Klasifikasi", "Evaluasi Model"]
+    )
 
-    if st.button("🔁 Train Model Random Forest"):
-        acc, cm, report = train_model()
+    if menu == "Data Training":
+        st.title("📄 Data Training")
+        st.dataframe(df)
 
-        st.success("Model berhasil dilatih dan disimpan")
+    elif menu == "Data Latih & Uji":
+        st.title("📂 Data Latih dan Data Uji")
+        X_train, X_test, _, _, _ = train_model()
+        st.write("Jumlah Data Latih:", X_train.shape[0])
+        st.write("Jumlah Data Uji:", X_test.shape[0])
 
-        st.subheader("📈 Akurasi Model")
-        st.write(f"Akurasi Model: **{acc:.2f}**")
+    elif menu == "Analisis Klasifikasi":
+        st.title("🧠 Analisis Klasifikasi")
+        _, _, acc, _, _ = train_model()
+        st.success(f"Akurasi Model Random Forest: {acc:.2f}")
 
-        st.subheader("📉 Confusion Matrix")
+    elif menu == "Evaluasi Model":
+        st.title("📊 Evaluasi Model")
+        _, _, _, cm, report = train_model()
+
         fig, ax = plt.subplots()
         sns.heatmap(
-            cm,
-            annot=True,
-            fmt="d",
-            cmap="Blues",
-            xticklabels=["Low", "Medium", "High"],
-            yticklabels=["Low", "Medium", "High"],
+            cm, annot=True, fmt="d", cmap="Blues",
+            xticklabels=["Low","Medium","High"],
+            yticklabels=["Low","Medium","High"],
             ax=ax
         )
-        ax.set_xlabel("Prediksi")
-        ax.set_ylabel("Aktual")
         st.pyplot(fig)
-
-        st.subheader("📄 Classification Report")
         st.text(report)
 
-# =====================================================
+    if st.sidebar.button("🚪 Logout"):
+        st.session_state.login = False
+        st.session_state.role = ""
+        st.rerun()
+
+# ======================================================
 # DASHBOARD SISWA
-# =====================================================
-elif menu == "🎓 Dashboard Siswa":
-    st.title("🎓 Dashboard Siswa")
+# ======================================================
+def siswa_dashboard():
+    st.title("🎓 Analisis Penggunaan AI (Siswa)")
 
-    if not os.path.exists(MODEL_PATH):
-        st.warning("Model belum tersedia. Silakan lakukan training terlebih dahulu.")
-        st.stop()
+    uploaded_file = st.file_uploader("Upload Data CSV", type="csv")
 
-    model = joblib.load(MODEL_PATH)
-    encoders = joblib.load(ENCODER_PATH)
+    if uploaded_file:
+        data = pd.read_csv(uploaded_file, sep=";")
+        st.dataframe(data)
 
-    col1, col2 = st.columns(2)
+        if not os.path.exists(MODEL_PATH):
+            st.error("Model belum tersedia. Hubungi Guru.")
+            return
 
-    with col1:
-        stream = st.selectbox("Stream", df["Stream"].unique())
-        year = st.selectbox("Year of Study", sorted(df["Year_of_Study"].unique()))
-        ai_tool = st.selectbox("AI Tools Used", df["AI_Tools_Used"].unique())
-        usage = st.slider("Daily Usage Hours", 0, 40, 5)
-
-    with col2:
-        trust = st.slider("Trust in AI Tools", 1, 5, 3)
-        aware = st.slider("Awareness Level", 1, 10, 5)
-        device = st.selectbox("Device Used", df["Device_Used"].unique())
-        internet = st.selectbox("Internet Access", df["Internet_Access"].unique())
-
-    if st.button("📌 Prediksi Performa Akademik"):
-        input_df = pd.DataFrame([[
-            stream, year, ai_tool, usage,
-            trust, aware, device, internet
-        ]], columns=[
-            "Stream", "Year_of_Study", "AI_Tools_Used",
-            "Daily_Usage_Hours", "Trust_in_AI_Tools",
-            "Awareness_Level", "Device_Used", "Internet_Access"
-        ])
+        model = joblib.load(MODEL_PATH)
+        encoders = joblib.load(ENCODER_PATH)
 
         for col, le in encoders.items():
-            input_df[col] = le.transform(input_df[col])
+            data[col] = le.transform(data[col])
 
-        prediction = model.predict(input_df)
-        st.success(f"Hasil Klasifikasi Performa Akademik: **{prediction[0]}**")
+        prediction = model.predict(data)
+
+        data["Hasil_Klasifikasi_AI"] = prediction
+        st.success("Hasil Analisis Klasifikasi")
+        st.dataframe(data)
+
+    if st.button("🚪 Logout"):
+        st.session_state.login = False
+        st.session_state.role = ""
+        st.rerun()
+
+# ======================================================
+# MAIN
+# ======================================================
+if not st.session_state.login:
+    login_page()
+else:
+    if st.session_state.role == "Guru":
+        guru_dashboard()
+    elif st.session_state.role == "Siswa":
+        siswa_dashboard()
