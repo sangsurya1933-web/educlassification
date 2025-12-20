@@ -86,26 +86,17 @@ def train_model():
     return X_train, X_test, acc, cm, report
 
 # ======================================================
-# LOGIN PAGE
+# LOGIN PAGE (TANPA PASSWORD)
 # ======================================================
 def login_page():
     st.title("🔐 Login Sistem")
 
-    role = st.selectbox("Login sebagai", ["Guru", "Siswa"])
-    user = st.text_input("Username")
-    pw = st.text_input("Password", type="password")
+    role = st.selectbox("Masuk sebagai", ["Guru", "Siswa"])
 
-    if st.button("Login"):
-        if role == "Guru" and user == "guru" and pw == "guru123":
-            st.session_state.login = True
-            st.session_state.role = "Guru"
-            st.rerun()
-        elif role == "Siswa" and user == "siswa" and pw == "siswa123":
-            st.session_state.login = True
-            st.session_state.role = "Siswa"
-            st.rerun()
-        else:
-            st.error("Username atau Password salah")
+    if st.button("Masuk"):
+        st.session_state.login = True
+        st.session_state.role = role
+        st.rerun()
 
 # ======================================================
 # DASHBOARD GURU
@@ -164,7 +155,7 @@ def siswa_dashboard():
         st.dataframe(data)
 
         if not os.path.exists(MODEL_PATH):
-            st.error("Model belum tersedia. Hubungi Guru.")
+            st.error("Model belum tersedia. Silakan minta Guru melakukan training.")
             return
 
         model = joblib.load(MODEL_PATH)
@@ -174,9 +165,9 @@ def siswa_dashboard():
             data[col] = le.transform(data[col])
 
         prediction = model.predict(data)
+        data["Hasil_Klasifikasi_Tingkat_AI"] = prediction
 
-        data["Hasil_Klasifikasi_AI"] = prediction
-        st.success("Hasil Analisis Klasifikasi")
+        st.success("Hasil Analisis Klasifikasi Tingkat Penggunaan AI")
         st.dataframe(data)
 
     if st.button("🚪 Logout"):
