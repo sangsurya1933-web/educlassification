@@ -10,18 +10,9 @@ import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings('ignore')
 import streamlit as st
-import hashlib
 import csv
 import os
-
-# ==================== FUNGSI UTILITAS ====================
-def make_hashes(password):
-    return hashlib.sha256(str.encode(password)).hexdigest()
-
-def check_hashes(password, hashed_text):
-    if make_hashes(password) == hashed_text:
-        return 
-
+import io
 
 # ==================== PREPROCESSING DATA ====================
 def preprocess_data(df):
@@ -77,7 +68,7 @@ def load_and_prepare_data(file_path):
         return None, None, None, None, None, None
 
 # ==================== ANALISIS RANDOM FOREST ====================
-def perform_random_forest_analysis(X, y, test_size=0.3, random_state=42):
+def perform_random_forest_analysis(X, y, test_size=0.3, random_state=42, n_estimators=100, max_depth=10):
     """Melakukan analisis dengan Random Forest"""
     
     # Split data
@@ -87,8 +78,8 @@ def perform_random_forest_analysis(X, y, test_size=0.3, random_state=42):
     
     # Inisialisasi dan train model
     rf_model = RandomForestClassifier(
-        n_estimators=100,
-        max_depth=10,
+        n_estimators=n_estimators,
+        max_depth=max_depth,
         random_state=random_state,
         n_jobs=-1
     )
@@ -183,7 +174,7 @@ def plot_results(analysis_results):
     return fig
 
 # ==================== EKSPOR DATA ====================
-def export_results_to_csv(analysis_results, label_encoders, prefix='analysis'):
+def export_results_to_csv(analysis_results, label_encoders=None, prefix='analysis'):
     """Ekspor hasil analisis ke CSV"""
     
     # Buat folder ekspor jika belum ada
@@ -225,7 +216,7 @@ def export_results_to_csv(analysis_results, label_encoders, prefix='analysis'):
     })
     metrics.to_csv(f'{export_folder}/{prefix}_model_metrics.csv', index=False)
     
-    # 7. Ekspor label encoders mapping
+    # 7. Ekspor label encoders mapping (jika ada)
     if label_encoders:
         encoder_mappings = {}
         for col, le in label_encoders.items():
@@ -237,7 +228,35 @@ def export_results_to_csv(analysis_results, label_encoders, prefix='analysis'):
     
     return export_folder
 
-# ==================== DASHBOARD STREAMLIT ====================
+# ==================== CREATE SAMPLE DATASET ====================
+def create_sample_dataset():
+    """Membuat dataset contoh untuk demo"""
+    np.random.seed(42)
+    
+    n_samples = 200
+    
+    # Buat fitur-fitur
+    data = {
+        'Student_ID': [f'STD{i:03d}' for i in range(1, n_samples+1)],
+        'College': np.random.choice(['Engineering', 'Commerce', 'Science', 'Arts', 'Medical'], n_samples),
+        'Year_of_Study': np.random.randint(1, 5, n_samples),
+        'AI_Tools_Used': np.random.choice(['ChatGPT', 'Gemini', 'Copilot', 'Bard', 'Multiple'], n_samples),
+        'Daily_Usage_Hours': np.random.randint(1, 10, n_samples),
+        'Use_Cases': np.random.choice(['Assignments', 'Exam Prep', 'Content Writing', 'MCQ Practice', 'Learning'], n_samples),
+        'Trust_in_AI': np.random.randint(1, 6, n_samples),
+        'Previous_GPA': np.random.uniform(2.0, 4.0, n_samples),
+        'Study_Hours_Daily': np.random.randint(2, 12, n_samples),
+        'Impact_on_Performance': np.random.choice(['High Improvement', 'Moderate Improvement', 
+                                                  'No Change', 'Negative Impact'], n_samples)
+    }
+    
+    df = pd.DataFrame(data)
+    
+    # Simpan ke CSV
+    df.to_csv('sample_student_data.csv', index=False)
+    return df
+
+# ==================== MAIN APPLICATION ====================
 def main():
     st.set_page_config(
         page_title="AI Usage Analysis - Random Forest",
@@ -246,367 +265,398 @@ def main():
     )
     
     st.title("🎓 Analisis Tingkat Penggunaan AI terhadap Performa Akademik")
+    st.markdown("**Menggunakan Algoritma Random Forest**")
     st.markdown("---")
     
     # Inisialisasi session state
-    if 'logged_in' not in st.session_state:
-        st.session_state.logged_in = False
-    if 'user_type' not in st.session_state:
-        st.session_state.user_type = None
     if 'analysis_results' not in st.session_state:
         st.session_state.analysis_results = None
     if 'data_loaded' not in st.session_state:
         st.session_state.data_loaded = False
     
-    # Sidebar untuk login
+    # Sidebar untuk kontrol
     with st.sidebar:
-        st.header("🔐 Login")
+        st.header("⚙️ Kontrol Analisis")
         
-        if not st.session_state.logged_in:
-            user_type = st.selectbox("Pilih jenis pengguna", ["", "Guru", "Siswa"])
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
+        st.subheader("1. Sumber Data")
+        data_source = st.radio(
+            "Pilih sumber data:",
+            ["Upload Dataset", "Gunakan Dataset Contoh"]
+        )
+        
+        if data_source == "Upload Dataset":
+            uploaded_file = st.file_uploader("📁 Upload dataset CSV", type=['csv'])
             
-            if st.button("Login"):
-                users_db = create_user_db()
+            if uploaded_file is not None:
+                # Simpan file sementara
+                with open("temp_dataset.csv", "wb") as f:
+                    f.write(uploaded_file.getbuffer())
                 
-                if user_type == "Guru" and username == "guru" and check_hashes(password, users_db['guru']):
-                    st.session_state.logged_in = True
-                    st.session_state.user_type = "Guru"
-                    st.success("Login berhasil sebagai Guru!")
-                    st.rerun()
-                elif user_type == "Siswa" and username == "siswa" and check_hashes(password, users_db['siswa']):
-                    st.session_state.logged_in = True
-                    st.session_state.user_type = "Siswa"
-                    st.success("Login berhasil sebagai Siswa!")
-                    st.rerun()
-                else:
-                    st.error("Username atau password salah!")
-        
-        if st.session_state.logged_in:
-            st.success(f"Login sebagai: {st.session_state.user_type}")
-            if st.button("Logout"):
-                st.session_state.logged_in = False
-                st.session_state.user_type = None
-                st.session_state.analysis_results = None
-                st.session_state.data_loaded = False
-                st.rerun()
-    
-    # Jika belum login, tampilkan instruksi
-    if not st.session_state.logged_in:
-        st.info("Silakan login terlebih dahulu menggunakan sidebar")
-        st.markdown("""
-        ### Credentials Login:
-        - **Guru**: username=`guru`, password=`guru123`
-        - **Siswa**: username=`siswa`, password=`siswa123`
-        
-        ### Dataset Information:
-        Analisis ini menggunakan algoritma Random Forest untuk mengklasifikasikan
-        dampak penggunaan AI terhadap performa akademik siswa.
-        """)
-        return
-    
-    # ==================== MENU UTAMA ====================
-    st.header(f"Dashboard {st.session_state.user_type}")
-    
-    # Upload dataset (hanya untuk Guru)
-    if st.session_state.user_type == "Guru":
-        uploaded_file = st.file_uploader("📁 Upload dataset CSV", type=['csv'])
-        
-        if uploaded_file is not None:
-            # Simpan file sementara
-            with open("temp_dataset.csv", "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            
-            # Load dan process data
-            with st.spinner("Memproses dataset..."):
-                X, y, X_original, label_encoders, target_col, df = load_and_prepare_data("temp_dataset.csv")
-                
-                if X is not None:
-                    st.session_state.data_loaded = True
-                    st.session_state.X = X
-                    st.session_state.y = y
-                    st.session_state.X_original = X_original
-                    st.session_state.label_encoders = label_encoders
-                    st.session_state.target_col = target_col
-                    st.session_state.df = df
-                    
-                    st.success("✅ Dataset berhasil diproses!")
-                    
-                    # Tampilkan preview data
-                    with st.expander("👁️ Preview Dataset"):
-                        st.write("**Data Asli:**")
-                        st.dataframe(df.head())
-                        st.write(f"**Shape:** {df.shape}")
-                        st.write(f"**Kolom Target:** {target_col}")
+                if st.button("🔍 Proses Dataset", type="primary"):
+                    with st.spinner("Memproses dataset..."):
+                        X, y, X_original, label_encoders, target_col, df = load_and_prepare_data("temp_dataset.csv")
                         
-                        st.write("**Data Setelah Preprocessing:**")
-                        st.dataframe(X.head())
-                        
-                        st.write("**Distribusi Target:**")
-                        st.bar_chart(y.value_counts())
-    
-    # Jika data sudah dimuat atau untuk siswa (gunakan dataset default)
-    if not st.session_state.data_loaded and st.session_state.user_type == "Siswa":
-        # Load dataset default untuk siswa
-        st.info("Menggunakan dataset default untuk analisis")
-        # Di sini Anda bisa load dataset default
+                        if X is not None:
+                            st.session_state.data_loaded = True
+                            st.session_state.X = X
+                            st.session_state.y = y
+                            st.session_state.X_original = X_original
+                            st.session_state.label_encoders = label_encoders
+                            st.session_state.target_col = target_col
+                            st.session_state.df = df
+                            st.success("✅ Dataset berhasil diproses!")
         
-    # Tab menu berdasarkan user type
-    if st.session_state.user_type == "Guru":
-        tab1, tab2, tab3, tab4 = st.tabs(["📊 Preprocessing", "🤖 Analisis", "📈 Evaluasi", "💾 Ekspor"])
-    else:
-        tab1, tab2 = st.tabs(["🤖 Analisis", "📈 Visualisasi"])
+        else:  # Gunakan dataset contoh
+            if st.button("📊 Generate Dataset Contoh", type="primary"):
+                with st.spinner("Membuat dataset contoh..."):
+                    df = create_sample_dataset()
+                    
+                    # Load dan prepare data
+                    X, y, X_original, label_encoders, target_col, df_processed = load_and_prepare_data('sample_student_data.csv')
+                    
+                    if X is not None:
+                        st.session_state.data_loaded = True
+                        st.session_state.X = X
+                        st.session_state.y = y
+                        st.session_state.X_original = X_original
+                        st.session_state.label_encoders = label_encoders
+                        st.session_state.target_col = target_col
+                        st.session_state.df = df
+                        st.success("✅ Dataset contoh berhasil dibuat!")
+        
+        st.markdown("---")
+        st.subheader("2. Parameter Model")
+        
+        n_estimators = st.slider("Jumlah Estimator", 10, 500, 100)
+        max_depth = st.slider("Max Depth", 2, 50, 10)
+        test_size = st.slider("Test Size (%)", 10, 50, 30) / 100
+        random_state = st.number_input("Random State", 0, 100, 42)
+        
+        st.markdown("---")
+        st.subheader("3. Aksi")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            run_analysis = st.button("🚀 Jalankan Analisis", type="primary", use_container_width=True)
+        with col2:
+            export_data = st.button("📥 Ekspor Hasil", use_container_width=True)
     
-    # ==================== TAB PREPROCESSING (GURU ONLY) ====================
-    if st.session_state.user_type == "Guru" and st.session_state.data_loaded:
-        with tab1:
-            st.subheader("Data Preprocessing")
+    # ==================== TAB UTAMA ====================
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 Dataset", "🔧 Preprocessing", "🤖 Analisis", "📈 Evaluasi"])
+    
+    # TAB 1: Dataset
+    with tab1:
+        st.header("Dataset Information")
+        
+        if st.session_state.data_loaded:
+            st.success(f"✅ Dataset berhasil dimuat: {len(st.session_state.df)} baris × {len(st.session_state.df.columns)} kolom")
             
             col1, col2 = st.columns(2)
             
             with col1:
-                st.write("**Informasi Dataset:**")
-                st.write(f"- Jumlah sampel: {st.session_state.df.shape[0]}")
-                st.write(f"- Jumlah fitur: {st.session_state.df.shape[1] - 1}")
-                st.write(f"- Kolom target: {st.session_state.target_col}")
+                st.subheader("Preview Data")
+                st.dataframe(st.session_state.df.head(), use_container_width=True)
                 
-                st.write("**Tipe Data:**")
-                dtypes_df = pd.DataFrame(st.session_state.df.dtypes, columns=['Data Type'])
-                st.dataframe(dtypes_df)
+                st.subheader("Informasi Dataset")
+                st.write(f"- **Jumlah Sampel:** {st.session_state.df.shape[0]}")
+                st.write(f"- **Jumlah Fitur:** {st.session_state.df.shape[1] - 1}")
+                st.write(f"- **Variabel Target:** {st.session_state.target_col}")
+                st.write(f"- **Tipe Dataset:** {data_source}")
             
             with col2:
-                st.write("**Statistik Deskriptif:**")
-                st.dataframe(st.session_state.df.describe())
-            
-            st.write("**Distribusi Variabel Target:**")
-            target_counts = st.session_state.y.value_counts()
-            fig_target, ax = plt.subplots(figsize=(8, 4))
-            target_counts.plot(kind='bar', ax=ax)
-            ax.set_title('Distribusi Variabel Target')
-            ax.set_xlabel('Kategori')
-            ax.set_ylabel('Jumlah')
-            st.pyplot(fig_target)
+                st.subheader("Statistik Deskriptif")
+                st.dataframe(st.session_state.df.describe(), use_container_width=True)
+                
+                st.subheader("Info Kolom")
+                info_df = pd.DataFrame({
+                    'Kolom': st.session_state.df.columns,
+                    'Tipe Data': st.session_state.df.dtypes.values,
+                    'Non-Null Count': st.session_state.df.notnull().sum().values
+                })
+                st.dataframe(info_df, use_container_width=True)
+        else:
+            st.info("👈 Silakan pilih sumber data dan proses dataset terlebih dahulu di sidebar")
     
-    # ==================== TAB ANALISIS ====================
-    if (st.session_state.user_type == "Guru" and st.session_state.data_loaded) or st.session_state.user_type == "Siswa":
-        analysis_tab = tab2 if st.session_state.user_type == "Siswa" else tab2
+    # TAB 2: Preprocessing
+    with tab2:
+        st.header("Data Preprocessing")
         
-        with analysis_tab:
-            st.subheader("Analisis dengan Random Forest")
+        if st.session_state.data_loaded:
+            col1, col2 = st.columns(2)
             
-            if st.session_state.user_type == "Guru" and not st.session_state.data_loaded:
-                st.warning("Silakan upload dataset terlebih dahulu")
-            else:
-                # Parameter untuk model (hanya guru yang bisa mengubah)
-                if st.session_state.user_type == "Guru":
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        n_estimators = st.slider("Jumlah Estimator", 10, 500, 100)
-                    with col2:
-                        max_depth = st.slider("Max Depth", 2, 50, 10)
-                    with col3:
-                        test_size = st.slider("Test Size (%)", 10, 50, 30) / 100
+            with col1:
+                st.subheader("Data Asli")
+                st.write("**Data sebelum preprocessing:**")
+                st.dataframe(st.session_state.X_original.head(), use_container_width=True)
+                
+                st.subheader("Missing Values Check")
+                missing_data = st.session_state.df.isnull().sum()
+                missing_df = pd.DataFrame({
+                    'Kolom': missing_data.index,
+                    'Missing Values': missing_data.values,
+                    'Persentase': (missing_data.values / len(st.session_state.df) * 100).round(2)
+                })
+                st.dataframe(missing_df[missing_df['Missing Values'] > 0], use_container_width=True)
+                
+                if len(missing_df[missing_df['Missing Values'] > 0]) == 0:
+                    st.success("✅ Tidak ada missing values")
+            
+            with col2:
+                st.subheader("Data Setelah Preprocessing")
+                st.write("**Data setelah encoding dan cleaning:**")
+                st.dataframe(st.session_state.X.head(), use_container_width=True)
+                
+                st.subheader("Encoding Information")
+                if st.session_state.label_encoders:
+                    st.write(f"**Jumlah variabel kategorikal:** {len(st.session_state.label_encoders)}")
+                    
+                    # Tampilkan contoh encoding
+                    encoder_expander = st.expander("Lihat Detail Encoding")
+                    with encoder_expander:
+                        for col, le in list(st.session_state.label_encoders.items())[:3]:  # Tampilkan 3 pertama
+                            st.write(f"**{col}:**")
+                            encoding_dict = dict(zip(le.classes_, le.transform(le.classes_)))
+                            for key, value in list(encoding_dict.items())[:5]:  # Tampilkan 5 pertama
+                                st.write(f"  {key} → {value}")
                 else:
-                    # Parameter default untuk siswa
-                    n_estimators = 100
-                    max_depth = 10
-                    test_size = 0.3
+                    st.info("Tidak ada variabel kategorikal yang perlu di-encode")
                 
-                if st.button("🚀 Jalankan Analisis", type="primary"):
-                    with st.spinner("Melakukan analisis dengan Random Forest..."):
-                        # Gunakan data yang sudah diproses
-                        if st.session_state.user_type == "Guru":
-                            X = st.session_state.X
-                            y = st.session_state.y
-                        else:
-                            # Untuk siswa, load dataset default
-                            # Di sini Anda bisa menambahkan dataset default
-                            st.info("Menggunakan dataset contoh untuk analisis")
-                            # Buat dataset contoh
-                            from sklearn.datasets import make_classification
-                            X, y = make_classification(
-                                n_samples=1000, n_features=20, n_classes=3,
-                                n_informative=10, random_state=42
-                            )
-                            X = pd.DataFrame(X, columns=[f'feature_{i}' for i in range(20)])
-                            y = pd.Series(y, name='target')
-                        
-                        # Lakukan analisis
-                        analysis_results = perform_random_forest_analysis(
-                            X, y, test_size=test_size
-                        )
-                        
-                        # Simpan ke session state
-                        st.session_state.analysis_results = analysis_results
-                        
-                        st.success("✅ Analisis selesai!")
-                        
-                        # Tampilkan hasil singkat
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Accuracy Training", f"{analysis_results['accuracy_train']:.3f}")
-                        with col2:
-                            st.metric("Accuracy Testing", f"{analysis_results['accuracy_test']:.3f}")
-                        with col3:
-                            st.metric("Jumlah Fitur", X.shape[1])
-                
-                # Tampilkan hasil jika sudah ada
-                if st.session_state.analysis_results is not None:
-                    results = st.session_state.analysis_results
-                    
-                    # Feature Importance
-                    st.subheader("Feature Importance")
-                    st.dataframe(results['feature_importance'].head(15))
-                    
-                    # Classification Report
-                    st.subheader("Classification Report")
-                    class_report_df = pd.DataFrame(results['classification_report']).transpose()
-                    st.dataframe(class_report_df)
+                st.subheader("Distribusi Target")
+                target_counts = st.session_state.y.value_counts()
+                fig_target, ax = plt.subplots(figsize=(8, 4))
+                target_counts.plot(kind='bar', ax=ax, color='skyblue')
+                ax.set_title('Distribusi Variabel Target')
+                ax.set_xlabel('Kategori')
+                ax.set_ylabel('Jumlah')
+                ax.grid(axis='y', alpha=0.3)
+                st.pyplot(fig_target)
+        else:
+            st.info("👈 Silakan muat dataset terlebih dahulu")
     
-    # ==================== TAB EVALUASI (GURU ONLY) ====================
-    if st.session_state.user_type == "Guru" and st.session_state.analysis_results is not None:
-        with tab3:
-            st.subheader("Evaluasi Model")
+    # TAB 3: Analisis
+    with tab3:
+        st.header("Analisis Random Forest")
+        
+        if st.session_state.data_loaded:
+            if run_analysis:
+                with st.spinner("Melakukan analisis dengan Random Forest..."):
+                    # Lakukan analisis
+                    analysis_results = perform_random_forest_analysis(
+                        st.session_state.X, 
+                        st.session_state.y, 
+                        test_size=test_size,
+                        random_state=random_state,
+                        n_estimators=n_estimators,
+                        max_depth=max_depth
+                    )
+                    
+                    # Simpan ke session state
+                    st.session_state.analysis_results = analysis_results
+                    
+                    st.success("✅ Analisis selesai!")
             
+            if st.session_state.analysis_results is not None:
+                results = st.session_state.analysis_results
+                
+                # Tampilkan hasil utama
+                st.subheader("Hasil Utama")
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Accuracy Training", f"{results['accuracy_train']:.3%}")
+                with col2:
+                    st.metric("Accuracy Testing", f"{results['accuracy_test']:.3%}")
+                with col3:
+                    st.metric("Jumlah Fitur", st.session_state.X.shape[1])
+                with col4:
+                    st.metric("Estimator RF", n_estimators)
+                
+                # Feature Importance
+                st.subheader("Feature Importance")
+                st.write("**Top 15 Fitur Paling Penting:**")
+                
+                # Buat visualisasi feature importance
+                fig_imp, ax_imp = plt.subplots(figsize=(12, 6))
+                top_15 = results['feature_importance'].head(15)
+                ax_imp.barh(range(len(top_15)), top_15['importance'][::-1])
+                ax_imp.set_yticks(range(len(top_15)))
+                ax_imp.set_yticklabels(top_15['feature'][::-1])
+                ax_imp.set_xlabel('Importance Score')
+                ax_imp.set_title('Top 15 Feature Importance')
+                ax_imp.grid(axis='x', alpha=0.3)
+                st.pyplot(fig_imp)
+                
+                # Tabel feature importance
+                st.dataframe(results['feature_importance'].head(20), use_container_width=True)
+                
+                # Classification Report
+                st.subheader("Classification Report")
+                class_report_df = pd.DataFrame(results['classification_report']).transpose()
+                st.dataframe(class_report_df, use_container_width=True)
+            else:
+                st.info("👈 Klik 'Jalankan Analisis' di sidebar untuk memulai")
+        else:
+            st.info("👈 Silakan muat dataset terlebih dahulu")
+    
+    # TAB 4: Evaluasi
+    with tab4:
+        st.header("Evaluasi Model")
+        
+        if st.session_state.data_loaded and st.session_state.analysis_results is not None:
             results = st.session_state.analysis_results
             
-            # Plot hasil
+            # Plot hasil lengkap
+            st.subheader("Visualisasi Hasil")
             fig = plot_results(results)
             st.pyplot(fig)
             
             # Detail confusion matrix
             st.subheader("Detail Confusion Matrix")
-            cm_df = pd.DataFrame(
-                results['confusion_matrix'],
-                columns=[f'Pred_{i}' for i in range(results['confusion_matrix'].shape[1])],
-                index=[f'Actual_{i}' for i in range(results['confusion_matrix'].shape[0])]
-            )
-            st.dataframe(cm_df)
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                cm_df = pd.DataFrame(
+                    results['confusion_matrix'],
+                    columns=[f'Pred_{i}' for i in range(results['confusion_matrix'].shape[1])],
+                    index=[f'Actual_{i}' for i in range(results['confusion_matrix'].shape[0])]
+                )
+                st.dataframe(cm_df.style.background_gradient(cmap='Blues'), use_container_width=True)
+            
+            with col2:
+                # Hitung metrics dari confusion matrix
+                total = np.sum(results['confusion_matrix'])
+                accuracy = np.trace(results['confusion_matrix']) / total
+                
+                st.metric("Overall Accuracy", f"{accuracy:.3%}")
+                st.metric("Total Samples", total)
+                st.metric("Classes", len(results['confusion_matrix']))
             
             # Interpretasi hasil
             st.subheader("Interpretasi Hasil")
-            st.write(f"""
-            **Akurasi Model:**
-            - Akurasi pada data training: **{results['accuracy_train']:.3f}**
-            - Akurasi pada data testing: **{results['accuracy_test']:.3f}**
             
-            **Kesimpulan:**
-            - Model Random Forest berhasil mencapai akurasi sebesar **{results['accuracy_test']:.3f}** pada data testing.
-            - Selisih antara akurasi training dan testing: **{abs(results['accuracy_train'] - results['accuracy_test']):.3f}**
-            - Fitur paling penting dalam prediksi: **{results['feature_importance'].iloc[0]['feature']}**
-            """)
-    
-    # ==================== TAB EKSPOR (GURU ONLY) ====================
-    if st.session_state.user_type == "Guru":
-        export_tab = tab4 if st.session_state.user_type == "Guru" else None
-        
-        if export_tab:
-            with export_tab:
-                st.subheader("Ekspor Hasil Analisis")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("""
+                **📊 Performa Model:**
+                - Akurasi pada data training: **{:.3%}**
+                - Akurasi pada data testing: **{:.3%}**
+                - Selisih (gap): **{:.3%}**
                 
-                if st.session_state.analysis_results is not None:
-                    col1, col2 = st.columns(2)
+                **🎯 Kesimpulan:**
+                - Model menunjukkan akurasi **{}** pada data testing.
+                - Gap yang kecil ({:.3%}) menunjukkan model tidak overfitting.
+                - Fitur paling penting: **{}**
+                """.format(
+                    results['accuracy_train'],
+                    results['accuracy_test'],
+                    abs(results['accuracy_train'] - results['accuracy_test']),
+                    "baik" if results['accuracy_test'] > 0.7 else "cukup",
+                    abs(results['accuracy_train'] - results['accuracy_test']),
+                    results['feature_importance'].iloc[0]['feature']
+                ))
+            
+            with col2:
+                st.markdown("""
+                **💡 Rekomendasi:**
+                1. Jika accuracy < 70%: Pertimbangkan untuk:
+                   - Feature engineering tambahan
+                   - Tuning hyperparameter lebih lanjut
+                   - Mencoba algoritma lain
+                
+                2. Jika accuracy > 85%: Model sudah baik untuk:
+                   - Prediksi performa akademik
+                   - Identifikasi faktor penting
+                   - Rekomendasi intervensi
+                
+                3. Aksi berdasarkan fitur penting:
+                   - Fokus pada variabel yang paling berpengaruh
+                   - Evaluasi kebijakan terkait variabel tersebut
+                """)
+            
+            # Ekspor hasil
+            st.subheader("Ekspor Hasil")
+            
+            if export_data:
+                with st.spinner("Mengekspor hasil analisis..."):
+                    export_folder = export_results_to_csv(
+                        results,
+                        st.session_state.label_encoders,
+                        prefix="ai_analysis"
+                    )
                     
-                    with col1:
-                        export_prefix = st.text_input("Nama file prefix", "ai_analysis")
+                    st.success(f"✅ Hasil berhasil diekspor ke folder: `{export_folder}/`")
                     
-                    with col2:
-                        st.write("")
-                        st.write("")
-                        if st.button("📥 Ekspor Semua Hasil ke CSV", type="primary"):
-                            with st.spinner("Mengekspor hasil..."):
-                                export_folder = export_results_to_csv(
-                                    st.session_state.analysis_results,
-                                    st.session_state.label_encoders if 'label_encoders' in st.session_state else None,
-                                    prefix=export_prefix
-                                )
-                                
-                                st.success(f"✅ Hasil berhasil diekspor ke folder: {export_folder}/")
-                                
-                                # Tampilkan list file yang diekspor
-                                files = os.listdir(export_folder)
-                                st.write("**File yang telah diekspor:**")
-                                for file in files:
-                                    if file.startswith(export_prefix):
-                                        st.write(f"- {file}")
+                    # Tampilkan file yang diekspor
+                    files = os.listdir(export_folder)
+                    st.write("**File yang telah diekspor:**")
+                    for file in files:
+                        if file.startswith("ai_analysis"):
+                            file_size = os.path.getsize(f'{export_folder}/{file}') / 1024
+                            st.write(f"- `{file}` ({file_size:.1f} KB)")
                     
-                    # Preview file yang akan diekspor
-                    st.subheader("Preview Data untuk Ekspor")
+                    # Download link untuk file utama
+                    st.markdown("---")
+                    st.subheader("📥 Download Hasil Analisis")
                     
-                    if st.session_state.analysis_results is not None:
-                        preview_option = st.selectbox(
-                            "Pilih data untuk preview",
-                            ["Feature Importance", "Classification Report", "Predictions", "Confusion Matrix"]
-                        )
+                    col1, col2, col3 = st.columns(3)
+                    
+                    # Buat fungsi download untuk file
+                    def create_download_link(file_path, label):
+                        with open(file_path, 'rb') as f:
+                            data = f.read()
+                        b64 = base64.b64encode(data).decode()
+                        href = f'<a href="data:file/csv;base64,{b64}" download="{os.path.basename(file_path)}">{label}</a>'
+                        return href
+                    
+                    try:
+                        import base64
                         
-                        if preview_option == "Feature Importance":
-                            st.dataframe(st.session_state.analysis_results['feature_importance'])
-                        elif preview_option == "Classification Report":
-                            class_report_df = pd.DataFrame(
-                                st.session_state.analysis_results['classification_report']
-                            ).transpose()
-                            st.dataframe(class_report_df)
-                        elif preview_option == "Predictions":
-                            predictions_df = pd.DataFrame({
-                                'Actual': st.session_state.analysis_results['y_test'].values,
-                                'Predicted': st.session_state.analysis_state.analysis_results['y_pred']
-                            })
-                            st.dataframe(predictions_df.head(20))
-                        elif preview_option == "Confusion Matrix":
-                            cm_df = pd.DataFrame(st.session_state.analysis_results['confusion_matrix'])
-                            st.dataframe(cm_df)
-                else:
-                    st.info("Lakukan analisis terlebih dahulu untuk mengekspor hasil")
-    
-    # ==================== TAB VISUALISASI (SISWA ONLY) ====================
-    if st.session_state.user_type == "Siswa" and st.session_state.analysis_results is not None:
-        with tab2:  # Tab Visualisasi untuk siswa
-            st.subheader("Visualisasi Hasil Analisis")
+                        with col1:
+                            with open(f'{export_folder}/ai_analysis_predictions.csv', 'rb') as f:
+                                st.download_button(
+                                    label="📊 Download Predictions",
+                                    data=f,
+                                    file_name="predictions.csv",
+                                    mime="text/csv"
+                                )
+                        
+                        with col2:
+                            with open(f'{export_folder}/ai_analysis_feature_importance.csv', 'rb') as f:
+                                st.download_button(
+                                    label="📈 Download Feature Importance",
+                                    data=f,
+                                    file_name="feature_importance.csv",
+                                    mime="text/csv"
+                                )
+                        
+                        with col3:
+                            with open(f'{export_folder}/ai_analysis_classification_report.csv', 'rb') as f:
+                                st.download_button(
+                                    label="📋 Download Classification Report",
+                                    data=f,
+                                    file_name="classification_report.csv",
+                                    mime="text/csv"
+                                )
+                    except:
+                        st.info("Import base64 untuk download otomatis")
             
-            if st.session_state.analysis_results is not None:
-                results = st.session_state.analysis_results
-                
-                # Plot sederhana untuk siswa
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write("**Feature Importance (Top 10)**")
-                    top_features = results['feature_importance'].head(10)
-                    fig1, ax1 = plt.subplots(figsize=(10, 6))
-                    ax1.barh(range(len(top_features)), top_features['importance'])
-                    ax1.set_yticks(range(len(top_features)))
-                    ax1.set_yticklabels(top_features['feature'])
-                    ax1.set_xlabel('Importance')
-                    ax1.set_title('Top 10 Most Important Features')
-                    st.pyplot(fig1)
-                
-                with col2:
-                    st.write("**Model Accuracy**")
-                    fig2, ax2 = plt.subplots(figsize=(8, 6))
-                    labels = ['Training', 'Testing']
-                    values = [results['accuracy_train'], results['accuracy_test']]
-                    bars = ax2.bar(labels, values, color=['blue', 'green'])
-                    ax2.set_ylabel('Accuracy')
-                    ax2.set_title('Model Performance')
-                    ax2.set_ylim(0, 1)
-                    
-                    # Tambahkan nilai di atas bar
-                    for bar, value in zip(bars, values):
-                        height = bar.get_height()
-                        ax2.text(bar.get_x() + bar.get_width()/2., height,
-                                f'{value:.3f}', ha='center', va='bottom')
-                    
-                    st.pyplot(fig2)
-                
-                # Confusion Matrix
-                st.write("**Confusion Matrix**")
-                fig3, ax3 = plt.subplots(figsize=(8, 6))
-                sns.heatmap(results['confusion_matrix'], annot=True, fmt='d', cmap='Blues', ax=ax3)
-                ax3.set_title('Confusion Matrix')
-                ax3.set_xlabel('Predicted Label')
-                ax3.set_ylabel('True Label')
-                st.pyplot(fig3)
+            else:
+                st.info("Klik 'Ekspor Hasil' di sidebar untuk mengekspor semua hasil analisis")
+        
+        elif st.session_state.data_loaded:
+            st.info("👈 Jalankan analisis terlebih dahulu di tab Analisis")
+        else:
+            st.info("👈 Silakan muat dataset terlebih dahulu")
+    
+    # Footer
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center'>
+        <p>📚 <b>Analisis Tingkat Penggunaan AI terhadap Performa Akademik</b></p>
+        <p>Menggunakan Algoritma Random Forest | Streamlit Dashboard</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
