@@ -1,20 +1,19 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import os
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
 
 # ======================================================
 # CONFIG
 # ======================================================
 st.set_page_config(page_title="Analisis Penggunaan AI", layout="wide")
 
-DATA_PATH = "Students tabel.csv"
 MODEL_PATH = "model_rf.pkl"
 ENCODER_PATH = "encoders.pkl"
 
@@ -25,15 +24,8 @@ if "login" not in st.session_state:
     st.session_state.login = False
 if "role" not in st.session_state:
     st.session_state.role = ""
-
-# ======================================================
-# LOAD DATA
-# ======================================================
-@st.cache_data
-def load_data():
-    return pd.read_csv(DATA_PATH, sep=";")
-
-df = load_data()
+if "guru_data" not in st.session_state:
+    st.session_state.guru_data = None
 
 # ======================================================
 # PREPROCESSING
@@ -41,7 +33,8 @@ df = load_data()
 def preprocessing(df):
     df = df.copy()
 
-    target_map = {1:"Low", 2:"Low", 3:"Medium", 4:"Medium", 5:"High"}
+    # Mapping target sesuai dataset
+    target_map = {1: "Low", 2: "Low", 3: "Medium", 4: "Medium", 5: "High"}
     df["Impact_Label"] = df["Impact_on_Grades"].map(target_map)
 
     features = [
@@ -62,16 +55,19 @@ def preprocessing(df):
     return X, y, encoders
 
 # ======================================================
-# TRAIN MODEL
+# TRAIN MODEL (HANYA DARI DATA GURU)
 # ======================================================
-def train_model():
+def train_model(df):
     X, y, encoders = preprocessing(df)
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
 
-    model = RandomForestClassifier(n_estimators=200, random_state=42)
+    model = RandomForestClassifier(
+        n_estimators=200,
+        random_state=42
+    )
     model.fit(X_train, y_train)
 
     y_pred = model.predict(X_test)
@@ -105,57 +101,87 @@ def guru_dashboard():
     st.sidebar.title("📊 Menu Guru")
     menu = st.sidebar.radio(
         "Pilih Menu",
-        ["Data Training", "Data Latih & Uji", "Analisis Klasifikasi", "Evaluasi Model"]
+        ["Upload Dataset", "Data Training", "Data Latih & Uji", "Analisis Klasifikasi", "Evaluasi Model"]
     )
 
+    # ---------------- Upload Dataset ----------------
+    if menu == "Upload Dataset":
+        st.title("📤 Upload Dataset Training (Guru)")
+        uploaded = st.file_uploader("Upload CSV Dataset Siswa", type="csv")
+
+        if uploaded:
+            df = pd.read_csv(uploaded, sep=";")
+            st.session_state.guru_data = df
+            st.success("Dataset berhasil diupload")
+            st.dataframe(df.head())
+
+    # Validasi dataset
+    if st.session_state.guru_data is None and menu != "Upload Dataset":
+        st.warning("Silakan upload dataset terlebih dahulu.")
+        return
+
+    df = st.session_state.guru_data
+
+    # ---------------- Data Training ----------------
     if menu == "Data Training":
         st.title("📄 Data Training")
         st.dataframe(df)
 
+    # ---------------- Data Latih & Uji ----------------
     elif menu == "Data Latih & Uji":
-        st.title("📂 Data Latih dan Data Uji")
-        X_train, X_test, _, _, _ = train_model()
+        st.title("📂 Data Latih & Data Uji")
+        X_train, X_test, _, _, _ = train_model(df)
         st.write("Jumlah Data Latih:", X_train.shape[0])
         st.write("Jumlah Data Uji:", X_test.shape[0])
 
+    # ---------------- Analisis Klasifikasi ----------------
     elif menu == "Analisis Klasifikasi":
         st.title("🧠 Analisis Klasifikasi")
-        _, _, acc, _, _ = train_model()
-        st.success(f"Akurasi Model Random Forest: {acc:.2f}")
+        _, _, acc, _, _ = train_model(df)
+        st.success(f"Akurasi Model Random Forest: **{acc:.2f}**")
 
+    # ---------------- Evaluasi Model ----------------
     elif menu == "Evaluasi Model":
         st.title("📊 Evaluasi Model")
-        _, _, _, cm, report = train_model()
+        _, _, _, cm, report = train_model(df)
 
         fig, ax = plt.subplots()
         sns.heatmap(
-            cm, annot=True, fmt="d", cmap="Blues",
-            xticklabels=["Low","Medium","High"],
-            yticklabels=["Low","Medium","High"],
+            cm,
+            annot=True,
+            fmt="d",
+            cmap="Blues",
+            xticklabels=["Low", "Medium", "High"],
+            yticklabels=["Low", "Medium", "High"],
             ax=ax
         )
+        ax.set_xlabel("Prediksi")
+        ax.set_ylabel("Aktual")
         st.pyplot(fig)
+
+        st.subheader("Classification Report")
         st.text(report)
 
     if st.sidebar.button("🚪 Logout"):
         st.session_state.login = False
         st.session_state.role = ""
+        st.session_state.guru_data = None
         st.rerun()
 
 # ======================================================
 # DASHBOARD SISWA
 # ======================================================
 def siswa_dashboard():
-    st.title("🎓 Analisis Penggunaan AI (Siswa)")
+    st.title("🎓 Analisis Tingkat Penggunaan AI (Siswa)")
 
-    uploaded_file = st.file_uploader("Upload Data CSV", type="csv")
+    uploaded = st.file_uploader("Upload Dataset Analisis (CSV)", type="csv")
 
-    if uploaded_file:
-        data = pd.read_csv(uploaded_file, sep=";")
-        st.dataframe(data)
+    if uploaded:
+        data = pd.read_csv(uploaded, sep=";")
+        st.dataframe(data.head())
 
         if not os.path.exists(MODEL_PATH):
-            st.error("Model belum tersedia. Silakan minta Guru melakukan training.")
+            st.error("Model belum tersedia. Guru harus melakukan training terlebih dahulu.")
             return
 
         model = joblib.load(MODEL_PATH)
@@ -167,7 +193,7 @@ def siswa_dashboard():
         prediction = model.predict(data)
         data["Hasil_Klasifikasi_Tingkat_AI"] = prediction
 
-        st.success("Hasil Analisis Klasifikasi Tingkat Penggunaan AI")
+        st.success("Hasil Analisis Klasifikasi")
         st.dataframe(data)
 
     if st.button("🚪 Logout"):
