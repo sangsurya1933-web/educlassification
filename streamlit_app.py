@@ -30,9 +30,9 @@ def login():
     password = st.text_input("Password", type="password")
 
     if st.button("Login"):
-        if role == "Guru" and username == "guru" and password == "guru123":
+        if role == "Guru" and username == "guru" and password == "guru":
             st.session_state["role"] = "Guru"
-        elif role == "Siswa" and username == "siswa" and password == "siswa123":
+        elif role == "Siswa" and username == "siswa" and password == "siswa":
             st.session_state["role"] = "Siswa"
         else:
             st.error("Username atau Password salah!")
