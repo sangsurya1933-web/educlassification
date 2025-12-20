@@ -92,29 +92,33 @@ def train_model():
     return acc, cm, report
 
 # =====================================================
-# LOGIN PAGE
-# =====================================================
-def login_page():
-    st.title("🔐 Login Sistem")
+# ================= LOGIN =================
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
-    role = st.selectbox("Login sebagai", ["Guru", "Siswa"])
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+if "role" not in st.session_state:
+    st.session_state.role = ""
+
+def login_page():
+    st.title("🔐 Login")
+
+    role = st.selectbox("Role", ["Guru", "Siswa"])
+    user = st.text_input("Username")
+    pw = st.text_input("Password", type="password")
 
     if st.button("Login"):
-        if role == "Guru" and username == "guru" and password == "guru123":
-            st.session_state.login = True
+        if role == "Guru" and user == "guru" and pw == "guru123":
+            st.session_state.logged_in = True
             st.session_state.role = "Guru"
-            st.rerun()
+            st.experimental_rerun()
 
-        elif role == "Siswa" and username == "siswa" and password == "siswa123":
-            st.session_state.login = True
+        elif role == "Siswa" and user == "siswa" and pw == "siswa123":
+            st.session_state.logged_in = True
             st.session_state.role = "Siswa"
-            st.rerun()
+            st.experimental_rerun()
 
         else:
             st.error("Username atau Password salah")
-
 # =====================================================
 # DASHBOARD GURU
 # =====================================================
