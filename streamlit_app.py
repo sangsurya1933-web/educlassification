@@ -319,7 +319,7 @@ def create_prediction_form():
             use_cases = st.selectbox("Use Cases", ["Assignments", "Exam Prep", "Research", "Projects"])
             college = st.selectbox("College", ["Engineering", "Commerce", "Science", "Arts", "Medical"])
         
-        submitted = st.form_submit_button("🔮 Prediksi Klasifikasi")
+        submitted = st.form_submit_button("Prediksi Klasifikasi")
         
         if submitted:
             return {
@@ -368,11 +368,11 @@ def predict_user_class(input_data, model, scaler, X_columns):
 def main():
     st.set_page_config(
         page_title="Klasifikasi Pengguna AI - Random Forest",
-        page_icon="🤖",
+        page_icon="",
         layout="wide"
     )
     
-    st.title("🤖 Analisis Klasifikasi Pengguna AI")
+    st.title("Analisis Klasifikasi Pengguna AI")
     st.markdown("**Klasifikasi Light vs Moderate vs Heavy User menggunakan Random Forest**")
     st.markdown("---")
     
@@ -384,10 +384,10 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        st.header("⚙️ Konfigurasi")
+        st.header("Konfigurasi")
         
         st.subheader("Dataset")
-        if st.button("🔄 Generate Dataset Baru", type="secondary"):
+        if st.button("Generate Dataset Baru", type="secondary"):
             st.session_state.df = create_sample_dataset()
             st.session_state.analysis_results = None
             st.success("Dataset baru dibuat!")
@@ -402,11 +402,11 @@ def main():
         st.markdown("---")
         st.subheader("Aksi")
         
-        if st.button("🚀 Jalankan Analisis", type="primary", use_container_width=True):
+        if st.button("Jalankan Analisis", type="primary", use_container_width=True):
             st.session_state.run_analysis = True
     
     # Tab utama
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Dataset", "📈 Analisis", "🎯 Prediksi", "📤 Ekspor"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Dataset", "Analisis", "Prediksi", "Ekspor"])
     
     # TAB 1: Dataset
     with tab1:
@@ -435,7 +435,7 @@ def main():
         st.pyplot(fig_dist)
         
         # Tampilkan kriteria klasifikasi
-        with st.expander("📋 Kriteria Klasifikasi", expanded=True):
+        with st.expander("Kriteria Klasifikasi", expanded=True):
             st.markdown("""
             ### **Klasifikasi Berdasarkan Daily Usage (jam/minggu):**
             
@@ -491,7 +491,7 @@ def main():
                     st.session_state.label_encoders = label_encoders
                     
                     # Tampilkan hasil
-                    st.success("✅ Analisis selesai!")
+                    st.success("Analisis selesai!")
                     
                     # Metrics utama
                     col1, col2, col3, col4 = st.columns(4)
@@ -511,7 +511,7 @@ def main():
                     st.pyplot(fig_analysis)
                     
                     # Feature importance detail
-                    with st.expander("📋 Detail Feature Importance"):
+                    with st.expander("Detail Feature Importance"):
                         st.dataframe(analysis_results['feature_importance'], use_container_width=True)
                         
                         # Cumulative importance
@@ -526,7 +526,7 @@ def main():
                         ax_cum.grid(True, alpha=0.3)
                         st.pyplot(fig_cum)
         else:
-            st.info("👈 Klik 'Jalankan Analisis' di sidebar untuk memulai")
+            st.info("Klik 'Jalankan Analisis' di sidebar untuk memulai")
     
     # TAB 3: Prediksi
     with tab3:
@@ -591,27 +591,27 @@ def main():
                     
                     if prediction == 0:  # Light User
                         st.info("""
-                        **🎯 Anda termasuk Light User:**
+                        **Anda termasuk Light User:**
                         - **Saran**: Tingkatkan penggunaan AI secara bertahap
                         - **Tips**: Mulai dengan 2-3 jam tambahan per minggu
                         - **Tools**: Coba ChatGPT untuk tugas menulis, Gemini untuk research
                         """)
                     elif prediction == 1:  # Moderate User
                         st.success("""
-                        **🎯 Anda termasuk Moderate User:**
+                        **Anda termasuk Moderate User:**
                         - **Status**: Penggunaan optimal, pertahankan!
                         - **Tips**: Diversifikasi tools untuk kebutuhan berbeda
                         - **Goal**: Optimalkan produktivitas dengan workflow yang efisien
                         """)
                     else:  # Heavy User
                         st.warning("""
-                        **🎯 Anda termasuk Heavy User:**
+                        **Anda termasuk Heavy User:**
                         - **Perhatian**: Evaluasi efektivitas penggunaan
                         - **Tips**: Pastikan AI meningkatkan kualitas belajar, bukan hanya kuantitas
                         - **Balance**: Kombinasikan dengan metode belajar tradisional
                         """)
         else:
-            st.info("👈 Jalankan analisis terlebih dahulu untuk menggunakan fitur prediksi")
+            st.info("Jalankan analisis terlebih dahulu untuk menggunakan fitur prediksi")
     
     # TAB 4: Ekspor
     with tab4:
@@ -621,14 +621,14 @@ def main():
             st.success("Hasil analisis siap diekspor!")
             
             # Tombol ekspor
-            if st.button("📥 Ekspor Semua Hasil ke CSV", type="primary"):
+            if st.button("Ekspor Semua Hasil ke CSV", type="primary"):
                 with st.spinner("Mengekspor hasil..."):
                     export_folder = export_to_csv(
                         st.session_state.df,
                         st.session_state.analysis_results
                     )
                     
-                    st.success(f"✅ Hasil berhasil diekspor ke folder: `{export_folder}/`")
+                    st.success(f"Hasil berhasil diekspor ke folder: `{export_folder}/`")
                     
                     # Tampilkan file yang diekspor
                     st.subheader("File yang Telah Diekspor")
@@ -655,7 +655,7 @@ def main():
                                         key=f"download_{file}"
                                     )
         else:
-            st.info("👈 Jalankan analisis terlebih dahulu untuk mengekspor hasil")
+            st.info("Jalankan analisis terlebih dahulu untuk mengekspor hasil")
     
     # Footer
     st.markdown("---")
