@@ -1,151 +1,161 @@
 import streamlit as st
 import pandas as pd
-import math
-from pathlib import Path
+import numpy as np
+import joblib
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
-
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
-
+# =====================
+# LOAD DATA
+# =====================
 @st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+def load_data():
+    df = pd.read_csv("Students tabel.csv", sep=";")
+    return df
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+df = load_data()
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+# =====================
+# LOGIN SYSTEM
+# =====================
+def login():
+    st.title("🔐 Login Sistem")
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+    role = st.selectbox("Login sebagai", ["Guru", "Siswa"])
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
+    if st.button("Login"):
+        if role == "Guru" and username == "guru" and password == "guru123":
+            st.session_state["role"] = "Guru"
+        elif role == "Siswa" and username == "siswa" and password == "siswa123":
+            st.session_state["role"] = "Siswa"
+        else:
+            st.error("Username atau Password salah!")
+
+# =====================
+# PREPROCESSING
+# =====================
+def preprocessing(df):
+    df_model = df.copy()
+
+    target_map = {
+        1: "Low",
+        2: "Low",
+        3: "Medium",
+        4: "Medium",
+        5: "High"
+    }
+    df_model["Impact_Label"] = df_model["Impact_on_Grades"].map(target_map)
+
+    features = [
+        "Stream", "Year_of_Study", "AI_Tools_Used",
+        "Daily_Usage_Hours", "Trust_in_AI_Tools",
+        "Awareness_Level", "Device_Used", "Internet_Access"
+    ]
+
+    X = df_model[features]
+    y = df_model["Impact_Label"]
+
+    encoders = {}
+    for col in X.select_dtypes(include="object").columns:
+        le = LabelEncoder()
+        X[col] = le.fit_transform(X[col])
+        encoders[col] = le
+
+    return X, y, encoders
+
+# =====================
+# TRAIN MODEL
+# =====================
+def train_model(X, y):
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
     )
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+    model = RandomForestClassifier(
+        n_estimators=200,
+        random_state=42
+    )
+    model.fit(X_train, y_train)
 
-    return gdp_df
+    y_pred = model.predict(X_test)
 
-gdp_df = get_gdp_data()
+    acc = accuracy_score(y_test, y_pred)
+    cm = confusion_matrix(y_test, y_pred)
+    report = classification_report(y_test, y_pred)
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
+    joblib.dump(model, "model_rf.pkl")
 
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
+    return acc, cm, report
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
+# =====================
+# DASHBOARD GURU
+# =====================
+def guru_dashboard():
+    st.title("📊 Dashboard Guru")
 
-# Add some spacing
-''
-''
+    if st.button("Train Model Random Forest"):
+        X, y, encoders = preprocessing(df)
+        acc, cm, report = train_model(X, y)
 
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
+        st.success("Model berhasil dilatih!")
 
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
+        st.subheader("📈 Akurasi Model")
+        st.write(f"Akurasi: **{acc:.2f}**")
 
-countries = gdp_df['Country Code'].unique()
+        st.subheader("📉 Confusion Matrix")
+        fig, ax = plt.subplots()
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+        st.pyplot(fig)
 
-if not len(countries):
-    st.warning("Select at least one country")
+        st.subheader("📄 Classification Report")
+        st.text(report)
 
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
+# =====================
+# DASHBOARD SISWA
+# =====================
+def siswa_dashboard():
+    st.title("🎓 Dashboard Siswa")
 
-''
-''
-''
+    model = joblib.load("model_rf.pkl")
 
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
+    stream = st.selectbox("Stream", df["Stream"].unique())
+    year = st.selectbox("Year of Study", sorted(df["Year_of_Study"].unique()))
+    ai_tool = st.selectbox("AI Tool Used", df["AI_Tools_Used"].unique())
+    usage = st.slider("Daily Usage Hours", 0, 40, 5)
+    trust = st.slider("Trust in AI", 1, 5, 3)
+    aware = st.slider("Awareness Level", 1, 10, 5)
+    device = st.selectbox("Device Used", df["Device_Used"].unique())
+    internet = st.selectbox("Internet Access", df["Internet_Access"].unique())
 
-st.header('GDP over time', divider='gray')
+    if st.button("Prediksi Performa Akademik"):
+        data = pd.DataFrame([[stream, year, ai_tool, usage, trust, aware, device, internet]],
+                            columns=[
+                                "Stream", "Year_of_Study", "AI_Tools_Used",
+                                "Daily_Usage_Hours", "Trust_in_AI_Tools",
+                                "Awareness_Level", "Device_Used", "Internet_Access"
+                            ])
 
-''
+        for col in data.select_dtypes(include="object").columns:
+            le = LabelEncoder()
+            le.fit(df[col])
+            data[col] = le.transform(data[col])
 
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
+        result = model.predict(data)
+        st.success(f"📌 Prediksi Performa Akademik: **{result[0]}**")
 
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
-        else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+# =====================
+# MAIN APP
+# =====================
+if "role" not in st.session_state:
+    login()
+else:
+    if st.session_state["role"] == "Guru":
+        guru_dashboard()
+    elif st.session_state["role"] == "Siswa":
+        siswa_dashboard()
