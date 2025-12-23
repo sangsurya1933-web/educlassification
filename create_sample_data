@@ -1,0 +1,46 @@
+import pandas as pd
+import numpy as np
+from faker import Faker
+import random
+
+def create_sample_data(num_records=100):
+    """Create sample data for testing"""
+    fake = Faker('id_ID')
+    
+    data = {
+        'Student_N': [fake.first_name() + ' ' + fake.last_name() for _ in range(num_records)],
+        'College_N': [fake.company() + ' University' for _ in range(num_records)],
+        'Stream': [random.choice(['Engineering', 'Commerce', 'Science', 'Arts', 'Medical', 'Law', 'Management', 'Agriculture']) 
+                   for _ in range(num_records)],
+        'AL_Tools_U': [random.choice(['ChatGPT', 'Gemini', 'Copilot', 'ChatGPT, Gemini', 'Gemini, Copilot', 'ChatGPT, Copilot']) 
+                       for _ in range(num_records)],
+        'Usage_Intel': np.random.randint(1, 50, num_records),
+        'Use_Cases': [random.choice(['Assignment', 'Learning', 'MCQ', 'Content', 'Doubt', 'Exam', 'Project', 'Coding']) 
+                      for _ in range(num_records)],
+        'Trust_in_A': np.random.randint(1, 6, num_records),
+        'Impact_on_Do_Profess': np.random.randint(-3, 4, num_records),
+        'Performance_Score': np.random.randint(50, 101, num_records)
+    }
+    
+    # Add some missing values
+    for _ in range(int(num_records * 0.1)):
+        col = random.choice(list(data.keys()))
+        idx = random.randint(0, num_records - 1)
+        data[col][idx] = np.nan if isinstance(data[col][idx], (int, float)) else None
+    
+    df = pd.DataFrame(data)
+    
+    # Create binary target variable (Pass/Fail)
+    df['Pass_Exam'] = df['Performance_Score'].apply(lambda x: 'Yes' if x >= 70 else 'No')
+    
+    return df
+
+if __name__ == "__main__":
+    # Create sample data
+    sample_data = create_sample_data(200)
+    
+    # Save to CSV
+    sample_data.to_csv('sample_student_data.csv', index=False, encoding='utf-8-sig')
+    print("Sample data created: sample_student_data.csv")
+    print(f"Shape: {sample_data.shape}")
+    print(f"Columns: {list(sample_data.columns)}")
