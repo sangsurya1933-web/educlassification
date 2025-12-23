@@ -20,13 +20,13 @@ st.title("📊 Analisis Tingkat Penggunaan AI terhadap Performa Akademik Siswa")
 role = st.sidebar.selectbox("Login sebagai", ["Guru", "Siswa"])
 
 # ======================
-# LOAD PDF
+# LOAD CSV
 # ======================
-uploaded_file = st.sidebar.file_uploader("Upload Students tabel.pdf", type=["pdf"])
+uploaded_file = st.sidebar.file_uploader("Upload Students tabel.csv", type=["csv"])
 
 if uploaded_file:
-    df = tabula.read_pdf(uploaded_file, pages='all')[0]
-    st.sidebar.success("Dataset berhasil dibaca dari PDF")
+    df = tabula.read_csv(uploaded_file, pages='all')[0]
+    st.sidebar.success("Dataset berhasil dibaca dari CSV")
 
 # ======================
 # PREPROCESSING FUNCTION
