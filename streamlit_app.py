@@ -2,434 +2,54 @@ import pandas as pd
 import numpy as np
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.metrics import (accuracy_score, precision_score, recall_score, 
+                           f1_score, mean_squared_error, mean_absolute_error, 
+                           confusion_matrix, classification_report)
+from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import seaborn as sns
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, mean_squared_error, mean_absolute_error, confusion_matrix, classification_report
-from sklearn.decomposition import PCA
 import warnings
 warnings.filterwarnings('ignore')
-import json
 from datetime import datetime
+import os
 
-class StudentAIAnalysisApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Analisis AI dalam Pendidikan")
-        self.root.geometry("1400x800")
-        
-        self.data = None
-        self.X_train = None
-        self.X_test = None
-        self.y_train = None
-        self.y_test = None
-        self.model = None
+class PreprocessingModule:
+    def __init__(self, data):
+        self.data = data.copy()
         self.scaler = StandardScaler()
-        self.is_teacher = False
-        self.le_dict = {}
+        self.label_encoders = {}
         
-        # Setup GUI
-        self.setup_login_screen()
-        
-    def setup_login_screen(self):
-        """Setup login screen to choose role"""
-        self.clear_window()
-        
-        tk.Label(self.root, text="SISTEM ANALISIS AI DALAM PENDIDIKAN", 
-                font=("Arial", 20, "bold")).pack(pady=20)
-        
-        tk.Label(self.root, text="Pilih Peran Anda:", 
-                font=("Arial", 14)).pack(pady=10)
-        
-        btn_frame = tk.Frame(self.root)
-        btn_frame.pack(pady=20)
-        
-        tk.Button(btn_frame, text="GURU/ADMIN", 
-                 command=self.login_as_teacher,
-                 width=20, height=3, bg="blue", fg="white",
-                 font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=20)
-        
-        tk.Button(btn_frame, text="SISWA", 
-                 command=self.login_as_student,
-                 width=20, height=3, bg="green", fg="white",
-                 font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=20)
-        
-    def login_as_teacher(self):
-        """Login as teacher/admin"""
-        password = tk.simpledialog.askstring("Login Guru", "Masukkan Password:", show='*')
-        if password == "guru123":  # Simple password for demo
-            self.is_teacher = True
-            self.setup_main_interface()
-        else:
-            messagebox.showerror("Error", "Password salah!")
-            
-    def login_as_student(self):
-        """Login as student"""
-        self.is_teacher = False
-        self.setup_main_interface()
-        
-    def clear_window(self):
-        """Clear all widgets from window"""
-        for widget in self.root.winfo_children():
-            widget.destroy()
-            
-    def setup_main_interface(self):
-        """Setup main interface based on role"""
-        self.clear_window()
-        
-        # Title
-        title = "PANEL GURU" if self.is_teacher else "PANEL SISWA"
-        tk.Label(self.root, text=title, 
-                font=("Arial", 18, "bold")).pack(pady=10)
-        
-        # Menu Frame
-        menu_frame = tk.Frame(self.root)
-        menu_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        # Buttons based on role
-        if self.is_teacher:
-            buttons = [
-                ("Load Data", self.load_data),
-                ("Preprocessing", self.show_preprocessing),
-                ("Analisis Data", self.show_analysis),
-                ("Train Model", self.train_model),
-                ("Evaluasi Model", self.evaluate_model),
-                ("Export Data", self.export_data),
-                ("Logout", self.logout)
-            ]
-        else:
-            buttons = [
-                ("Load Data", self.load_data),
-                ("Analisis Data", self.show_analysis),
-                ("Prediksi", self.predict_data),
-                ("Export Data", self.export_data),
-                ("Logout", self.logout)
-            ]
-        
-        for text, command in buttons:
-            tk.Button(menu_frame, text=text, command=command,
-                     width=15, height=2).pack(side=tk.LEFT, padx=5)
-        
-        # Main Content Area
-        self.content_frame = tk.Frame(self.root)
-        self.content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        # Status bar
-        self.status_var = tk.StringVar()
-        self.status_var.set("Status: Ready")
-        tk.Label(self.root, textvariable=self.status_var, 
-                bd=1, relief=tk.SUNKEN, anchor=tk.W).pack(side=tk.BOTTOM, fill=tk.X)
-    
-    def logout(self):
-        """Logout and return to login screen"""
-        self.data = None
-        self.model = None
-        self.setup_login_screen()
-    
-    def load_data(self):
-        """Load data from CSV file"""
-        file_path = filedialog.askopenfilename(
-            title="Pilih file data",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
-        )
-        
-        if file_path:
-            try:
-                self.data = pd.read_csv(file_path)
-                self.status_var.set(f"Status: Data loaded - {len(self.data)} records")
-                messagebox.showinfo("Success", "Data berhasil dimuat!")
-                self.show_data_preview()
-            except Exception as e:
-                messagebox.showerror("Error", f"Gagal memuat data: {str(e)}")
-    
-    def show_data_preview(self):
-        """Show data preview in content area"""
-        self.clear_content()
-        
-        if self.data is None:
-            tk.Label(self.content_frame, text="Tidak ada data yang dimuat").pack()
-            return
-        
-        # Create notebook for tabs
-        notebook = ttk.Notebook(self.content_frame)
-        notebook.pack(fill=tk.BOTH, expand=True)
-        
-        # Preview tab
-        preview_frame = ttk.Frame(notebook)
-        notebook.add(preview_frame, text="Preview Data")
-        
-        # Treeview for data
-        tree_frame = tk.Frame(preview_frame)
-        tree_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        # Add scrollbars
-        tree_scroll_y = tk.Scrollbar(tree_frame)
-        tree_scroll_y.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        tree_scroll_x = tk.Scrollbar(tree_frame, orient=tk.HORIZONTAL)
-        tree_scroll_x.pack(side=tk.BOTTOM, fill=tk.X)
-        
-        # Create treeview
-        tree = ttk.Treeview(tree_frame, 
-                           yscrollcommand=tree_scroll_y.set,
-                           xscrollcommand=tree_scroll_x.set)
-        tree.pack(fill=tk.BOTH, expand=True)
-        
-        tree_scroll_y.config(command=tree.yview)
-        tree_scroll_x.config(command=tree.xview)
-        
-        # Define columns
-        tree["columns"] = list(self.data.columns)
-        tree["show"] = "headings"
-        
-        # Create headings
-        for col in self.data.columns:
-            tree.heading(col, text=col)
-            tree.column(col, width=100)
-        
-        # Add data
-        for i, row in self.data.head(100).iterrows():  # Show first 100 rows
-            tree.insert("", tk.END, values=list(row))
-        
-        # Info tab
-        info_frame = ttk.Frame(notebook)
-        notebook.add(info_frame, text="Data Info")
-        
-        info_text = tk.Text(info_frame, wrap=tk.NONE)
-        info_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        info = f"Shape: {self.data.shape}\n\n"
-        info += f"Columns: {list(self.data.columns)}\n\n"
-        info += "Data Types:\n"
-        info += str(self.data.dtypes) + "\n\n"
-        info += "Missing Values:\n"
-        info += str(self.data.isnull().sum())
-        
-        info_text.insert(tk.END, info)
-        info_text.config(state=tk.DISABLED)
-        
-        # Statistics tab
-        stats_frame = ttk.Frame(notebook)
-        notebook.add(stats_frame, text="Statistics")
-        
-        stats_text = tk.Text(stats_frame, wrap=tk.NONE)
-        stats_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        numeric_cols = self.data.select_dtypes(include=[np.number]).columns
-        if len(numeric_cols) > 0:
-            stats = self.data[numeric_cols].describe()
-            stats_text.insert(tk.END, str(stats))
-        else:
-            stats_text.insert(tk.END, "No numeric columns found")
-        
-        stats_text.config(state=tk.DISABLED)
-    
-    def show_preprocessing(self):
-        """Show preprocessing options (teacher only)"""
-        if not self.is_teacher:
-            messagebox.showwarning("Access Denied", "Hanya guru yang dapat mengakses fitur ini")
-            return
-        
-        self.clear_content()
-        
-        if self.data is None:
-            tk.Label(self.content_frame, text="Load data terlebih dahulu").pack()
-            return
-        
-        # Preprocessing notebook
-        notebook = ttk.Notebook(self.content_frame)
-        notebook.pack(fill=tk.BOTH, expand=True)
-        
-        # 1. Data Cleaning
-        cleaning_frame = ttk.Frame(notebook)
-        notebook.add(cleaning_frame, text="Pembersihan Data")
-        
-        tk.Label(cleaning_frame, text="Pembersihan Data", 
-                font=("Arial", 14, "bold")).pack(pady=10)
-        
-        # Missing values
-        missing_frame = tk.LabelFrame(cleaning_frame, text="Missing Values")
-        missing_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        missing_info = tk.Text(missing_frame, height=5)
-        missing_info.pack(fill=tk.X, padx=5, pady=5)
-        missing_info.insert(tk.END, str(self.data.isnull().sum()))
-        missing_info.config(state=tk.DISABLED)
-        
-        tk.Button(missing_frame, text="Hapus Rows dengan Missing Values",
-                 command=self.remove_missing).pack(pady=5)
-        tk.Button(missing_frame, text="Isi dengan Mean/Median",
-                 command=self.fill_missing).pack(pady=5)
-        
-        # Duplicates
-        dup_frame = tk.LabelFrame(cleaning_frame, text="Duplikat")
-        dup_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        dup_count = len(self.data[self.data.duplicated()])
-        tk.Label(dup_frame, text=f"Jumlah duplikat: {dup_count}").pack()
-        
-        tk.Button(dup_frame, text="Hapus Duplikat",
-                 command=self.remove_duplicates).pack(pady=5)
-        
-        # Outliers
-        outlier_frame = tk.LabelFrame(cleaning_frame, text="Outliers")
-        outlier_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        tk.Button(outlier_frame, text="Deteksi Outliers (IQR Method)",
-                 command=self.detect_outliers).pack(pady=5)
-        tk.Button(outlier_frame, text="Hapus Outliers",
-                 command=self.remove_outliers).pack(pady=5)
-        
-        # 2. Data Transformation
-        transform_frame = ttk.Frame(notebook)
-        notebook.add(transform_frame, text="Transformasi Data")
-        
-        tk.Label(transform_frame, text="Transformasi Data", 
-                font=("Arial", 14, "bold")).pack(pady=10)
-        
-        # Encoding
-        encode_frame = tk.LabelFrame(transform_frame, text="Encoding Kategorikal")
-        encode_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        cat_cols = self.data.select_dtypes(include=['object']).columns.tolist()
-        if cat_cols:
-            tk.Label(encode_frame, text=f"Kolom kategorikal: {cat_cols}").pack()
-            
-            self.encode_var = tk.StringVar(value=cat_cols[0] if cat_cols else "")
-            encode_combo = ttk.Combobox(encode_frame, textvariable=self.encode_var,
-                                       values=cat_cols)
-            encode_combo.pack(pady=5)
-            
-            tk.Button(encode_frame, text="Label Encoding",
-                     command=self.label_encode).pack(pady=2)
-            tk.Button(encode_frame, text="One-Hot Encoding",
-                     command=self.onehot_encode).pack(pady=2)
-        else:
-            tk.Label(encode_frame, text="Tidak ada kolom kategorikal").pack()
-        
-        # Normalization
-        norm_frame = tk.LabelFrame(transform_frame, text="Normalisasi/Standarisasi")
-        norm_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        num_cols = self.data.select_dtypes(include=[np.number]).columns.tolist()
-        if num_cols:
-            tk.Label(norm_frame, text=f"Kolom numerik: {num_cols}").pack()
-            
-            self.norm_var = tk.StringVar(value=num_cols[0] if num_cols else "")
-            norm_combo = ttk.Combobox(norm_frame, textvariable=self.norm_var,
-                                     values=num_cols)
-            norm_combo.pack(pady=5)
-            
-            tk.Button(norm_frame, text="StandardScaler",
-                     command=self.standard_scaler).pack(pady=2)
-            tk.Button(norm_frame, text="MinMaxScaler",
-                     command=self.minmax_scaler).pack(pady=2)
-        else:
-            tk.Label(norm_frame, text="Tidak ada kolom numerik").pack()
-        
-        # 3. Data Reduction
-        reduction_frame = ttk.Frame(notebook)
-        notebook.add(reduction_frame, text="Reduksi Data")
-        
-        tk.Label(reduction_frame, text="Reduksi Data", 
-                font=("Arial", 14, "bold")).pack(pady=10)
-        
-        # PCA
-        pca_frame = tk.LabelFrame(reduction_frame, text="Principal Component Analysis (PCA)")
-        pca_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        self.pca_var = tk.IntVar(value=2)
-        tk.Label(pca_frame, text="Jumlah Komponen:").pack()
-        tk.Entry(pca_frame, textvariable=self.pca_var, width=10).pack()
-        
-        tk.Button(pca_frame, text="Apply PCA",
-                 command=self.apply_pca).pack(pady=5)
-        
-        # Feature Selection
-        feat_frame = tk.LabelFrame(reduction_frame, text="Seleksi Fitur")
-        feat_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        tk.Button(feat_frame, text="Importance-based Selection",
-                 command=self.feature_selection).pack(pady=5)
-        
-        # 4. Data Splitting
-        split_frame = ttk.Frame(notebook)
-        notebook.add(split_frame, text="Pembagian Data")
-        
-        tk.Label(split_frame, text="Pembagian Data Train-Test", 
-                font=("Arial", 14, "bold")).pack(pady=10)
-        
-        split_control = tk.Frame(split_frame)
-        split_control.pack(pady=10)
-        
-        tk.Label(split_control, text="Test Size:").pack(side=tk.LEFT)
-        self.test_size_var = tk.DoubleVar(value=0.2)
-        tk.Entry(split_control, textvariable=self.test_size_var, width=10).pack(side=tk.LEFT, padx=5)
-        
-        tk.Label(split_control, text="Random State:").pack(side=tk.LEFT, padx=10)
-        self.random_state_var = tk.IntVar(value=42)
-        tk.Entry(split_control, textvariable=self.random_state_var, width=10).pack(side=tk.LEFT)
-        
-        tk.Button(split_frame, text="Split Data",
-                 command=self.split_data,
-                 width=20, height=2).pack(pady=10)
-        
-        if self.X_train is not None:
-            info = f"Data sudah terbagi:\n"
-            info += f"X_train shape: {self.X_train.shape}\n"
-            info += f"X_test shape: {self.X_test.shape}\n"
-            info += f"y_train shape: {self.y_train.shape}\n"
-            info += f"y_test shape: {self.y_test.shape}"
-            tk.Label(split_frame, text=info, justify=tk.LEFT).pack(pady=10)
-    
     def remove_missing(self):
-        """Remove rows with missing values"""
-        if self.data is not None:
-            original_len = len(self.data)
-            self.data = self.data.dropna()
-            new_len = len(self.data)
-            messagebox.showinfo("Success", 
-                              f"Dihapus {original_len - new_len} rows dengan missing values")
-            self.show_preprocessing()
+        """Remove missing values"""
+        before = len(self.data)
+        self.data = self.data.dropna()
+        after = len(self.data)
+        return f"Removed {before - after} rows with missing values"
     
     def fill_missing(self):
-        """Fill missing values with mean/median"""
-        if self.data is not None:
-            numeric_cols = self.data.select_dtypes(include=[np.number]).columns
-            
-            for col in numeric_cols:
-                if self.data[col].isnull().sum() > 0:
-                    self.data[col].fillna(self.data[col].median(), inplace=True)
-            
-            # For categorical columns, fill with mode
-            cat_cols = self.data.select_dtypes(include=['object']).columns
-            for col in cat_cols:
-                if self.data[col].isnull().sum() > 0:
-                    self.data[col].fillna(self.data[col].mode()[0], inplace=True)
-            
-            messagebox.showinfo("Success", "Missing values telah diisi")
-            self.show_preprocessing()
+        """Fill missing values with median/mode"""
+        for col in self.data.columns:
+            if self.data[col].dtype in ['int64', 'float64']:
+                self.data[col].fillna(self.data[col].median(), inplace=True)
+            else:
+                self.data[col].fillna(self.data[col].mode()[0], inplace=True)
+        return "Missing values filled with median/mode"
     
     def remove_duplicates(self):
         """Remove duplicate rows"""
-        if self.data is not None:
-            original_len = len(self.data)
-            self.data = self.data.drop_duplicates()
-            new_len = len(self.data)
-            messagebox.showinfo("Success", 
-                              f"Dihapus {original_len - new_len} duplikat")
-            self.show_preprocessing()
+        before = len(self.data)
+        self.data = self.data.drop_duplicates()
+        after = len(self.data)
+        return f"Removed {before - after} duplicate rows"
     
-    def detect_outliers(self):
+    def detect_outliers_iqr(self):
         """Detect outliers using IQR method"""
-        if self.data is None:
-            return
-        
         numeric_cols = self.data.select_dtypes(include=[np.number]).columns
-        outlier_info = "Outlier Detection:\n\n"
+        outliers_info = {}
         
         for col in numeric_cols:
             Q1 = self.data[col].quantile(0.25)
@@ -439,17 +59,14 @@ class StudentAIAnalysisApp:
             upper_bound = Q3 + 1.5 * IQR
             
             outliers = self.data[(self.data[col] < lower_bound) | (self.data[col] > upper_bound)]
-            outlier_info += f"{col}: {len(outliers)} outliers\n"
+            outliers_info[col] = len(outliers)
         
-        messagebox.showinfo("Outlier Detection", outlier_info)
+        return outliers_info
     
-    def remove_outliers(self):
+    def remove_outliers_iqr(self):
         """Remove outliers using IQR method"""
-        if self.data is None:
-            return
-        
         numeric_cols = self.data.select_dtypes(include=[np.number]).columns
-        original_len = len(self.data)
+        before = len(self.data)
         
         for col in numeric_cols:
             Q1 = self.data[col].quantile(0.25)
@@ -460,98 +77,55 @@ class StudentAIAnalysisApp:
             
             self.data = self.data[(self.data[col] >= lower_bound) & (self.data[col] <= upper_bound)]
         
-        new_len = len(self.data)
-        messagebox.showinfo("Success", 
-                          f"Dihapus {original_len - new_len} outliers")
-        self.show_preprocessing()
+        after = len(self.data)
+        return f"Removed {before - after} outliers"
     
-    def label_encode(self):
-        """Apply label encoding to selected column"""
-        if self.data is None:
-            return
-        
-        col = self.encode_var.get()
-        if col not in self.data.columns:
-            return
-        
-        le = LabelEncoder()
-        self.data[col] = le.fit_transform(self.data[col].astype(str))
-        self.le_dict[col] = le
-        
-        messagebox.showinfo("Success", f"Label encoding applied to {col}")
-        self.show_preprocessing()
+    def label_encode_column(self, column):
+        """Apply label encoding to a column"""
+        if column in self.data.columns:
+            le = LabelEncoder()
+            self.data[column] = le.fit_transform(self.data[column].astype(str))
+            self.label_encoders[column] = le
+            return f"Label encoding applied to {column}"
+        return f"Column {column} not found"
     
-    def onehot_encode(self):
-        """Apply one-hot encoding to selected column"""
-        if self.data is None:
-            return
-        
-        col = self.encode_var.get()
-        if col not in self.data.columns:
-            return
-        
-        # Create dummy variables
-        dummies = pd.get_dummies(self.data[col], prefix=col)
-        
-        # Add to dataframe and drop original column
-        self.data = pd.concat([self.data, dummies], axis=1)
-        self.data = self.data.drop(col, axis=1)
-        
-        messagebox.showinfo("Success", f"One-hot encoding applied to {col}")
-        self.show_preprocessing()
+    def onehot_encode_column(self, column):
+        """Apply one-hot encoding to a column"""
+        if column in self.data.columns:
+            dummies = pd.get_dummies(self.data[column], prefix=column)
+            self.data = pd.concat([self.data, dummies], axis=1)
+            self.data = self.data.drop(column, axis=1)
+            return f"One-hot encoding applied to {column}"
+        return f"Column {column} not found"
     
-    def standard_scaler(self):
-        """Apply standard scaler to selected column"""
-        if self.data is None:
-            return
-        
-        col = self.norm_var.get()
-        if col not in self.data.columns:
-            return
-        
-        from sklearn.preprocessing import StandardScaler
-        scaler = StandardScaler()
-        self.data[col] = scaler.fit_transform(self.data[[col]])
-        
-        messagebox.showinfo("Success", f"StandardScaler applied to {col}")
-        self.show_preprocessing()
+    def standard_scale_column(self, column):
+        """Apply standard scaling to a column"""
+        if column in self.data.columns and self.data[column].dtype in ['int64', 'float64']:
+            scaler = StandardScaler()
+            self.data[column] = scaler.fit_transform(self.data[[column]])
+            return f"Standard scaling applied to {column}"
+        return f"Column {column} is not numeric"
     
-    def minmax_scaler(self):
-        """Apply min-max scaler to selected column"""
-        if self.data is None:
-            return
-        
-        col = self.norm_var.get()
-        if col not in self.data.columns:
-            return
-        
-        from sklearn.preprocessing import MinMaxScaler
-        scaler = MinMaxScaler()
-        self.data[col] = scaler.fit_transform(self.data[[col]])
-        
-        messagebox.showinfo("Success", f"MinMaxScaler applied to {col}")
-        self.show_preprocessing()
+    def minmax_scale_column(self, column):
+        """Apply min-max scaling to a column"""
+        if column in self.data.columns and self.data[column].dtype in ['int64', 'float64']:
+            scaler = MinMaxScaler()
+            self.data[column] = scaler.fit_transform(self.data[[column]])
+            return f"Min-Max scaling applied to {column}"
+        return f"Column {column} is not numeric"
     
-    def apply_pca(self):
+    def apply_pca(self, n_components):
         """Apply PCA for dimensionality reduction"""
-        if self.data is None:
-            return
+        numeric_data = self.data.select_dtypes(include=[np.number])
         
-        numeric_cols = self.data.select_dtypes(include=[np.number]).columns
-        if len(numeric_cols) < 2:
-            messagebox.showwarning("Warning", "Minimal 2 kolom numerik diperlukan untuk PCA")
-            return
+        if len(numeric_data.columns) < 2:
+            return "Need at least 2 numeric columns for PCA"
         
-        n_components = self.pca_var.get()
-        if n_components >= len(numeric_cols):
-            messagebox.showwarning("Warning", "Jumlah komponen harus kurang dari jumlah fitur")
-            return
+        if n_components >= len(numeric_data.columns):
+            return "Number of components must be less than number of features"
         
-        from sklearn.decomposition import PCA
         pca = PCA(n_components=n_components)
-        
-        # Fit and transform
-        pca_result = pca.fit_transform(self.data[numeric_cols])
+        pca_result = pca.fit_transform(numeric_data)
         
         # Create new column names
         pca_cols = [f'PCA_{i+1}' for i in range(n_components)]
@@ -560,489 +134,898 @@ class StudentAIAnalysisApp:
         pca_df = pd.DataFrame(pca_result, columns=pca_cols)
         
         # Drop original numeric columns and add PCA columns
-        self.data = self.data.drop(numeric_cols, axis=1)
+        self.data = self.data.drop(numeric_data.columns, axis=1)
         self.data = pd.concat([self.data, pca_df], axis=1)
         
-        messagebox.showinfo("Success", 
-                          f"PCA applied: {len(numeric_cols)} features → {n_components} components")
-        self.show_preprocessing()
+        return f"PCA applied: {len(numeric_data.columns)} features → {n_components} components"
     
-    def feature_selection(self):
-        """Select important features using Random Forest"""
-        if self.data is None:
-            return
-        
-        # For simplicity, let's assume last column is target
-        if len(self.data.columns) < 2:
-            return
-        
-        target_col = self.data.columns[-1]
-        X = self.data.drop(target_col, axis=1)
-        y = self.data[target_col]
-        
-        # Only numeric features for RF importance
-        numeric_cols = X.select_dtypes(include=[np.number]).columns
-        if len(numeric_cols) == 0:
-            messagebox.showwarning("Warning", "Tidak ada fitur numerik untuk seleksi")
-            return
-        
-        from sklearn.ensemble import RandomForestClassifier
-        
-        # Convert categorical target if needed
-        if y.dtype == 'object':
-            le = LabelEncoder()
-            y_encoded = le.fit_transform(y)
-            rf = RandomForestClassifier()
-        else:
-            rf = RandomForestRegressor()
-            y_encoded = y
-        
-        rf.fit(X[numeric_cols], y_encoded)
-        
-        # Get feature importances
-        importances = rf.feature_importances_
-        indices = np.argsort(importances)[::-1]
-        
-        # Show importance ranking
-        importance_text = "Feature Importances:\n\n"
-        for i, idx in enumerate(indices[:10]):  # Top 10 features
-            importance_text += f"{i+1}. {numeric_cols[idx]}: {importances[idx]:.4f}\n"
-        
-        messagebox.showinfo("Feature Importance", importance_text)
-        
-        # Ask user how many features to keep
-        top_n = tk.simpledialog.askinteger("Feature Selection", 
-                                          "Berapa banyak fitur terbaik yang akan disimpan?",
-                                          minvalue=1, maxvalue=len(numeric_cols))
-        
-        if top_n:
-            # Select top N features
-            top_features = numeric_cols[indices[:top_n]].tolist()
-            
-            # Keep only selected features plus any categorical columns
-            cat_cols = X.select_dtypes(include=['object']).columns.tolist()
-            cols_to_keep = top_features + cat_cols + [target_col]
-            
-            self.data = self.data[cols_to_keep]
-            messagebox.showinfo("Success", f"Selected {top_n} most important features")
-            self.show_preprocessing()
-    
-    def split_data(self):
+    def split_data(self, target_column, test_size=0.2, random_state=42):
         """Split data into train and test sets"""
-        if self.data is None:
-            return
+        if target_column not in self.data.columns:
+            return None, None, None, None, "Target column not found"
         
-        # Assume last column is target
-        target_col = self.data.columns[-1]
-        X = self.data.drop(target_col, axis=1)
-        y = self.data[target_col]
+        X = self.data.drop(target_column, axis=1)
+        y = self.data[target_column]
         
         # Encode target if categorical
         if y.dtype == 'object':
             le = LabelEncoder()
             y = le.fit_transform(y)
         
-        # Split data
-        test_size = self.test_size_var.get()
-        random_state = self.random_state_var.get()
-        
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-            X, y, test_size=test_size, random_state=random_state, stratify=y if len(set(y)) < 10 else None
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, random_state=random_state, 
+            stratify=y if len(set(y)) < 10 else None
         )
         
-        # Scale features
-        self.scaler.fit(self.X_train.select_dtypes(include=[np.number]))
-        
-        messagebox.showinfo("Success", 
-                          f"Data split completed:\n"
-                          f"Train: {len(self.X_train)} samples\n"
-                          f"Test: {len(self.X_test)} samples")
-        self.show_preprocessing()
+        return X_train, X_test, y_train, y_test, "Data split completed"
     
-    def show_analysis(self):
-        """Show data analysis visualizations"""
+    def get_data_info(self):
+        """Get information about the dataset"""
+        info = {
+            'shape': self.data.shape,
+            'columns': list(self.data.columns),
+            'dtypes': str(self.data.dtypes.to_dict()),
+            'missing_values': self.data.isnull().sum().to_dict(),
+            'numeric_columns': list(self.data.select_dtypes(include=[np.number]).columns),
+            'categorical_columns': list(self.data.select_dtypes(include=['object']).columns)
+        }
+        return info
+
+class RandomForestModel:
+    def __init__(self):
+        self.model = None
+        self.scaler = StandardScaler()
+        self.problem_type = None
+        self.metrics = {}
+        
+    def train(self, X_train, y_train, n_estimators=100, max_depth=None, random_state=42):
+        """Train Random Forest model"""
+        # Determine problem type
+        unique_classes = len(np.unique(y_train))
+        
+        # Scale features
+        X_train_scaled = X_train.copy()
+        numeric_cols = X_train.select_dtypes(include=[np.number]).columns
+        
+        if len(numeric_cols) > 0:
+            X_train_scaled[numeric_cols] = self.scaler.fit_transform(X_train[numeric_cols])
+        
+        if unique_classes < 10:  # Classification
+            self.problem_type = "classification"
+            self.model = RandomForestClassifier(
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                random_state=random_state,
+                n_jobs=-1
+            )
+        else:  # Regression
+            self.problem_type = "regression"
+            self.model = RandomForestRegressor(
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                random_state=random_state,
+                n_jobs=-1
+            )
+        
+        self.model.fit(X_train_scaled, y_train)
+        return f"Model trained ({self.problem_type}) with {len(X_train)} samples"
+    
+    def predict(self, X_test):
+        """Make predictions"""
+        if self.model is None:
+            return None, "Model not trained"
+        
+        X_test_scaled = X_test.copy()
+        numeric_cols = X_test.select_dtypes(include=[np.number]).columns
+        
+        if len(numeric_cols) > 0:
+            X_test_scaled[numeric_cols] = self.scaler.transform(X_test[numeric_cols])
+        
+        predictions = self.model.predict(X_test_scaled)
+        return predictions, "Predictions made"
+    
+    def evaluate(self, X_test, y_test):
+        """Evaluate model performance"""
+        if self.model is None:
+            return "Model not trained"
+        
+        predictions, _ = self.predict(X_test)
+        
+        if self.problem_type == "classification":
+            # Classification metrics
+            self.metrics['accuracy'] = accuracy_score(y_test, predictions)
+            self.metrics['precision'] = precision_score(y_test, predictions, average='weighted', zero_division=0)
+            self.metrics['recall'] = recall_score(y_test, predictions, average='weighted', zero_division=0)
+            self.metrics['f1_score'] = f1_score(y_test, predictions, average='weighted', zero_division=0)
+            
+            # Confusion matrix
+            cm = confusion_matrix(y_test, predictions)
+            
+            report = classification_report(y_test, predictions, output_dict=True)
+            
+            return {
+                'metrics': self.metrics,
+                'confusion_matrix': cm.tolist(),
+                'classification_report': report,
+                'predictions': predictions.tolist()
+            }
+        else:
+            # Regression metrics
+            self.metrics['mse'] = mean_squared_error(y_test, predictions)
+            self.metrics['mae'] = mean_absolute_error(y_test, predictions)
+            self.metrics['rmse'] = np.sqrt(self.metrics['mse'])
+            
+            residuals = y_test - predictions
+            
+            return {
+                'metrics': self.metrics,
+                'residuals': residuals.tolist(),
+                'predictions': predictions.tolist()
+            }
+    
+    def get_feature_importance(self, feature_names):
+        """Get feature importance from model"""
+        if self.model is None:
+            return None
+        
+        importance = self.model.feature_importances_
+        feature_importance = pd.DataFrame({
+            'feature': feature_names,
+            'importance': importance
+        }).sort_values('importance', ascending=False)
+        
+        return feature_importance
+    
+    def predict_single(self, features):
+        """Predict for a single sample"""
+        if self.model is None:
+            return None, "Model not trained"
+        
+        # Convert features to DataFrame
+        features_df = pd.DataFrame([features])
+        
+        # Scale features
+        numeric_cols = features_df.select_dtypes(include=[np.number]).columns
+        
+        if len(numeric_cols) > 0:
+            features_df[numeric_cols] = self.scaler.transform(features_df[numeric_cols])
+        
+        prediction = self.model.predict(features_df)[0]
+        
+        if self.problem_type == "classification" and hasattr(self.model, 'predict_proba'):
+            proba = self.model.predict_proba(features_df)[0]
+            return prediction, proba
+        
+        return prediction, None
+
+class StudentAIAnalysisApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Analisis Penggunaan AI dalam Pendidikan")
+        self.root.geometry("1400x800")
+        
+        # Initialize components
+        self.data = None
+        self.preprocessor = None
+        self.model = RandomForestModel()
+        self.X_train = None
+        self.X_test = None
+        self.y_train = None
+        self.y_test = None
+        self.is_teacher = False
+        
+        # Setup GUI
+        self.setup_login_screen()
+    
+    def setup_login_screen(self):
+        """Setup login screen"""
+        self.clear_window()
+        
+        tk.Label(self.root, text="SISTEM ANALISIS AI DALAM PENDIDIKAN", 
+                font=("Arial", 20, "bold"), fg="blue").pack(pady=30)
+        
+        tk.Label(self.root, text="Pilih Peran Anda:", 
+                font=("Arial", 14)).pack(pady=20)
+        
+        btn_frame = tk.Frame(self.root)
+        btn_frame.pack(pady=20)
+        
+        tk.Button(btn_frame, text="GURU/ADMIN", 
+                 command=self.login_as_teacher,
+                 width=20, height=3, bg="navy", fg="white",
+                 font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=20)
+        
+        tk.Button(btn_frame, text="SISWA", 
+                 command=self.login_as_student,
+                 width=20, height=3, bg="darkgreen", fg="white",
+                 font=("Arial", 12, "bold")).pack(side=tk.LEFT, padx=20)
+    
+    def login_as_teacher(self):
+        """Login as teacher"""
+        password = tk.simpledialog.askstring("Login Guru", "Masukkan Password:", show='*')
+        if password == "admin123":
+            self.is_teacher = True
+            self.setup_main_interface()
+            messagebox.showinfo("Login Berhasil", "Selamat datang, Guru!")
+        else:
+            messagebox.showerror("Login Gagal", "Password salah!")
+    
+    def login_as_student(self):
+        """Login as student"""
+        self.is_teacher = False
+        self.setup_main_interface()
+        messagebox.showinfo("Login Berhasil", "Selamat datang, Siswa!")
+    
+    def clear_window(self):
+        """Clear all widgets from window"""
+        for widget in self.root.winfo_children():
+            widget.destroy()
+    
+    def setup_main_interface(self):
+        """Setup main interface based on role"""
+        self.clear_window()
+        
+        # Title
+        title = "PANEL GURU - Analisis Penggunaan AI" if self.is_teacher else "PANEL SISWA - Analisis Penggunaan AI"
+        title_label = tk.Label(self.root, text=title, 
+                              font=("Arial", 18, "bold"), 
+                              bg="lightgray", fg="darkblue")
+        title_label.pack(fill=tk.X, pady=5)
+        
+        # Menu Frame
+        menu_frame = tk.Frame(self.root, bg="lightblue")
+        menu_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        # Common buttons
+        common_buttons = [
+            ("📁 Load Data", self.load_data),
+            ("📊 Analisis Data", self.show_analysis),
+            ("📈 Prediksi", self.show_prediction),
+            ("💾 Export Data", self.export_data),
+            ("🚪 Logout", self.logout)
+        ]
+        
+        # Teacher-specific buttons
+        if self.is_teacher:
+            teacher_buttons = [
+                ("🧹 Preprocessing", self.show_preprocessing),
+                ("🤖 Train Model", self.train_model),
+                ("📋 Evaluasi Model", self.evaluate_model)
+            ]
+            all_buttons = teacher_buttons + common_buttons
+        else:
+            all_buttons = common_buttons
+        
+        # Create buttons
+        for text, command in all_buttons:
+            btn = tk.Button(menu_frame, text=text, command=command,
+                           width=15, height=2, bg="white", fg="black",
+                           font=("Arial", 10))
+            btn.pack(side=tk.LEFT, padx=5, pady=5)
+        
+        # Status bar
+        self.status_var = tk.StringVar()
+        self.status_var.set("Status: Siap")
+        status_bar = tk.Label(self.root, textvariable=self.status_var, 
+                             bd=1, relief=tk.SUNKEN, anchor=tk.W,
+                             bg="lightgray", fg="black")
+        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        # Main Content Area
+        self.content_frame = tk.Frame(self.root, bg="white")
+        self.content_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Welcome message
+        welcome_msg = "Silakan load data untuk memulai analisis" if self.data is None else f"Data loaded: {len(self.data)} records"
+        tk.Label(self.content_frame, text=welcome_msg, 
+                font=("Arial", 12), bg="white").pack(pady=20)
+    
+    def load_data(self):
+        """Load data from CSV file"""
+        file_path = filedialog.askopenfilename(
+            title="Pilih file CSV",
+            filetypes=[("CSV files", "*.csv"), ("Excel files", "*.xlsx"), ("All files", "*.*")]
+        )
+        
+        if file_path:
+            try:
+                if file_path.endswith('.csv'):
+                    self.data = pd.read_csv(file_path)
+                elif file_path.endswith('.xlsx'):
+                    self.data = pd.read_excel(file_path)
+                else:
+                    # Try CSV first
+                    self.data = pd.read_csv(file_path)
+                
+                self.preprocessor = PreprocessingModule(self.data)
+                self.status_var.set(f"Status: Data dimuat - {len(self.data)} baris, {len(self.data.columns)} kolom")
+                messagebox.showinfo("Sukses", f"Data berhasil dimuat!\n\nBaris: {len(self.data)}\nKolom: {len(self.data.columns)}")
+                self.show_data_preview()
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Gagal memuat data:\n{str(e)}")
+    
+    def show_data_preview(self):
+        """Show data preview"""
         self.clear_content()
         
         if self.data is None:
-            tk.Label(self.content_frame, text="Load data terlebih dahulu").pack()
+            tk.Label(self.content_frame, text="Tidak ada data yang dimuat", 
+                    font=("Arial", 12), bg="white").pack(pady=50)
+            return
+        
+        # Create notebook for tabs
+        notebook = ttk.Notebook(self.content_frame)
+        notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Tab 1: Data Preview
+        preview_frame = ttk.Frame(notebook)
+        notebook.add(preview_frame, text="Preview Data")
+        
+        # Add scrollbars
+        container = tk.Frame(preview_frame)
+        container.pack(fill=tk.BOTH, expand=True)
+        
+        canvas = tk.Canvas(container)
+        scrollbar_y = tk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        scrollbar_x = tk.Scrollbar(container, orient="horizontal", command=canvas.xview)
+        
+        scrollable_frame = tk.Frame(canvas)
+        
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+        
+        # Create treeview
+        tree = ttk.Treeview(scrollable_frame)
+        
+        # Define columns
+        tree["columns"] = list(self.data.columns)
+        tree["show"] = "headings"
+        
+        # Create headings
+        for col in self.data.columns:
+            tree.heading(col, text=col)
+            tree.column(col, width=100, minwidth=50)
+        
+        # Add data (first 50 rows)
+        for i, row in self.data.head(50).iterrows():
+            tree.insert("", tk.END, values=list(row))
+        
+        tree.pack(fill=tk.BOTH, expand=True)
+        
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar_y.pack(side="right", fill="y")
+        scrollbar_x.pack(side="bottom", fill="x")
+        
+        # Tab 2: Data Info
+        info_frame = ttk.Frame(notebook)
+        notebook.add(info_frame, text="Info Data")
+        
+        info_text = tk.Text(info_frame, wrap=tk.WORD, height=20)
+        info_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        info = "=== INFORMASI DATA ===\n\n"
+        info += f"Shape: {self.data.shape}\n"
+        info += f"Total Records: {len(self.data)}\n"
+        info += f"Total Features: {len(self.data.columns)}\n\n"
+        
+        info += "=== KOLOM ===\n"
+        for i, col in enumerate(self.data.columns, 1):
+            info += f"{i}. {col} ({self.data[col].dtype})\n"
+        
+        info += "\n=== MISSING VALUES ===\n"
+        missing = self.data.isnull().sum()
+        for col in self.data.columns:
+            if missing[col] > 0:
+                info += f"{col}: {missing[col]} missing values\n"
+        
+        info += "\n=== DATA TYPES ===\n"
+        dtypes = self.data.dtypes.value_counts()
+        for dtype, count in dtypes.items():
+            info += f"{dtype}: {count} columns\n"
+        
+        info_text.insert(tk.END, info)
+        info_text.config(state=tk.DISABLED)
+        
+        # Tab 3: Statistics
+        stats_frame = ttk.Frame(notebook)
+        notebook.add(stats_frame, text="Statistik")
+        
+        stats_text = tk.Text(stats_frame, wrap=tk.WORD, height=20)
+        stats_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        numeric_cols = self.data.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) > 0:
+            stats = self.data[numeric_cols].describe()
+            stats_text.insert(tk.END, str(stats))
+        else:
+            stats_text.insert(tk.END, "Tidak ada kolom numerik")
+        
+        stats_text.config(state=tk.DISABLED)
+    
+    def show_preprocessing(self):
+        """Show preprocessing options (teacher only)"""
+        if not self.is_teacher:
+            messagebox.showwarning("Akses Ditolak", "Hanya guru yang dapat mengakses fitur ini")
+            return
+        
+        if self.data is None:
+            messagebox.showwarning("Peringatan", "Load data terlebih dahulu")
+            return
+        
+        self.clear_content()
+        
+        tk.Label(self.content_frame, text="PREPROCESSING DATA", 
+                font=("Arial", 16, "bold"), bg="white").pack(pady=10)
+        
+        # Create notebook for preprocessing steps
+        notebook = ttk.Notebook(self.content_frame)
+        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # 1. Data Cleaning
+        cleaning_frame = ttk.Frame(notebook)
+        notebook.add(cleaning_frame, text="Pembersihan Data")
+        
+        tk.Label(cleaning_frame, text="Pembersihan Data", 
+                font=("Arial", 14, "bold")).pack(pady=10)
+        
+        # Missing values
+        missing_frame = tk.LabelFrame(cleaning_frame, text="Missing Values", padx=10, pady=10)
+        missing_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        missing_count = self.data.isnull().sum().sum()
+        tk.Label(missing_frame, text=f"Total missing values: {missing_count}").pack(anchor=tk.W)
+        
+        tk.Button(missing_frame, text="Hapus Rows dengan Missing Values",
+                 command=self.handle_remove_missing, width=30).pack(pady=5)
+        tk.Button(missing_frame, text="Isi dengan Median/Mode",
+                 command=self.handle_fill_missing, width=30).pack(pady=5)
+        
+        # Duplicates
+        dup_frame = tk.LabelFrame(cleaning_frame, text="Duplikat", padx=10, pady=10)
+        dup_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        dup_count = self.data.duplicated().sum()
+        tk.Label(dup_frame, text=f"Jumlah duplikat: {dup_count}").pack(anchor=tk.W)
+        
+        tk.Button(dup_frame, text="Hapus Duplikat",
+                 command=self.handle_remove_duplicates, width=30).pack(pady=5)
+        
+        # Outliers
+        outlier_frame = tk.LabelFrame(cleaning_frame, text="Outliers", padx=10, pady=10)
+        outlier_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        tk.Button(outlier_frame, text="Deteksi Outliers (IQR Method)",
+                 command=self.handle_detect_outliers, width=30).pack(pady=5)
+        tk.Button(outlier_frame, text="Hapus Outliers",
+                 command=self.handle_remove_outliers, width=30).pack(pady=5)
+        
+        # 2. Data Transformation
+        transform_frame = ttk.Frame(notebook)
+        notebook.add(transform_frame, text="Transformasi Data")
+        
+        tk.Label(transform_frame, text="Transformasi Data", 
+                font=("Arial", 14, "bold")).pack(pady=10)
+        
+        # Column selection
+        col_frame = tk.Frame(transform_frame)
+        col_frame.pack(pady=10)
+        
+        tk.Label(col_frame, text="Pilih Kolom:").pack(side=tk.LEFT)
+        
+        self.transform_col_var = tk.StringVar()
+        col_combo = ttk.Combobox(col_frame, textvariable=self.transform_col_var,
+                                values=list(self.data.columns), width=30)
+        col_combo.pack(side=tk.LEFT, padx=10)
+        col_combo.set(self.data.columns[0] if len(self.data.columns) > 0 else "")
+        
+        # Encoding
+        encode_frame = tk.LabelFrame(transform_frame, text="Encoding", padx=10, pady=10)
+        encode_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        tk.Button(encode_frame, text="Label Encoding",
+                 command=self.handle_label_encode, width=20).pack(side=tk.LEFT, padx=5)
+        tk.Button(encode_frame, text="One-Hot Encoding",
+                 command=self.handle_onehot_encode, width=20).pack(side=tk.LEFT, padx=5)
+        
+        # Scaling
+        scale_frame = tk.LabelFrame(transform_frame, text="Scaling", padx=10, pady=10)
+        scale_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        tk.Button(scale_frame, text="Standard Scaling",
+                 command=self.handle_standard_scale, width=20).pack(side=tk.LEFT, padx=5)
+        tk.Button(scale_frame, text="Min-Max Scaling",
+                 command=self.handle_minmax_scale, width=20).pack(side=tk.LEFT, padx=5)
+        
+        # 3. Data Reduction
+        reduction_frame = ttk.Frame(notebook)
+        notebook.add(reduction_frame, text="Reduksi Data")
+        
+        tk.Label(reduction_frame, text="Reduksi Data", 
+                font=("Arial", 14, "bold")).pack(pady=10)
+        
+        # PCA
+        pca_frame = tk.LabelFrame(reduction_frame, text="PCA", padx=10, pady=10)
+        pca_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        tk.Label(pca_frame, text="Jumlah Komponen:").pack(side=tk.LEFT)
+        
+        self.pca_n_var = tk.IntVar(value=2)
+        pca_spin = tk.Spinbox(pca_frame, from_=1, to=min(10, len(self.data.columns)), 
+                             textvariable=self.pca_n_var, width=10)
+        pca_spin.pack(side=tk.LEFT, padx=10)
+        
+        tk.Button(pca_frame, text="Apply PCA",
+                 command=self.handle_pca, width=20).pack(side=tk.LEFT)
+        
+        # 4. Data Splitting
+        split_frame = ttk.Frame(notebook)
+        notebook.add(split_frame, text="Pembagian Data")
+        
+        tk.Label(split_frame, text="Pembagian Data Train-Test", 
+                font=("Arial", 14, "bold")).pack(pady=10)
+        
+        split_controls = tk.Frame(split_frame)
+        split_controls.pack(pady=20)
+        
+        # Target column selection
+        tk.Label(split_controls, text="Target Column:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        self.target_col_var = tk.StringVar()
+        target_combo = ttk.Combobox(split_controls, textvariable=self.target_col_var,
+                                   values=list(self.data.columns), width=30)
+        target_combo.grid(row=0, column=1, padx=10, pady=5)
+        target_combo.set(self.data.columns[-1] if len(self.data.columns) > 0 else "")
+        
+        # Test size
+        tk.Label(split_controls, text="Test Size:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.test_size_var = tk.DoubleVar(value=0.2)
+        test_size_entry = tk.Entry(split_controls, textvariable=self.test_size_var, width=10)
+        test_size_entry.grid(row=1, column=1, padx=10, pady=5, sticky=tk.W)
+        
+        # Random state
+        tk.Label(split_controls, text="Random State:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.random_state_var = tk.IntVar(value=42)
+        random_state_entry = tk.Entry(split_controls, textvariable=self.random_state_var, width=10)
+        random_state_entry.grid(row=2, column=1, padx=10, pady=5, sticky=tk.W)
+        
+        # Split button
+        tk.Button(split_frame, text="Split Data", 
+                 command=self.handle_split_data,
+                 width=20, height=2, bg="green", fg="white").pack(pady=10)
+        
+        # Show current split status
+        if self.X_train is not None:
+            status_text = f"Data sudah terbagi:\n"
+            status_text += f"Train: {len(self.X_train)} samples\n"
+            status_text += f"Test: {len(self.X_test)} samples\n"
+            status_text += f"Features: {len(self.X_train.columns)}"
+            
+            status_label = tk.Label(split_frame, text=status_text, justify=tk.LEFT)
+            status_label.pack(pady=10)
+    
+    def handle_remove_missing(self):
+        """Handle remove missing values"""
+        if self.preprocessor:
+            result = self.preprocessor.remove_missing()
+            self.data = self.preprocessor.data
+            messagebox.showinfo("Sukses", result)
+            self.show_preprocessing()
+    
+    def handle_fill_missing(self):
+        """Handle fill missing values"""
+        if self.preprocessor:
+            result = self.preprocessor.fill_missing()
+            self.data = self.preprocessor.data
+            messagebox.showinfo("Sukses", result)
+            self.show_preprocessing()
+    
+    def handle_remove_duplicates(self):
+        """Handle remove duplicates"""
+        if self.preprocessor:
+            result = self.preprocessor.remove_duplicates()
+            self.data = self.preprocessor.data
+            messagebox.showinfo("Sukses", result)
+            self.show_preprocessing()
+    
+    def handle_detect_outliers(self):
+        """Handle detect outliers"""
+        if self.preprocessor:
+            outliers = self.preprocessor.detect_outliers_iqr()
+            
+            if outliers:
+                result = "Outliers ditemukan:\n"
+                for col, count in outliers.items():
+                    result += f"{col}: {count} outliers\n"
+            else:
+                result = "Tidak ditemukan outliers"
+            
+            messagebox.showinfo("Deteksi Outliers", result)
+    
+    def handle_remove_outliers(self):
+        """Handle remove outliers"""
+        if self.preprocessor:
+            result = self.preprocessor.remove_outliers_iqr()
+            self.data = self.preprocessor.data
+            messagebox.showinfo("Sukses", result)
+            self.show_preprocessing()
+    
+    def handle_label_encode(self):
+        """Handle label encoding"""
+        if self.preprocessor:
+            col = self.transform_col_var.get()
+            if col:
+                result = self.preprocessor.label_encode_column(col)
+                self.data = self.preprocessor.data
+                messagebox.showinfo("Sukses", result)
+                self.show_preprocessing()
+    
+    def handle_onehot_encode(self):
+        """Handle one-hot encoding"""
+        if self.preprocessor:
+            col = self.transform_col_var.get()
+            if col:
+                result = self.preprocessor.onehot_encode_column(col)
+                self.data = self.preprocessor.data
+                messagebox.showinfo("Sukses", result)
+                self.show_preprocessing()
+    
+    def handle_standard_scale(self):
+        """Handle standard scaling"""
+        if self.preprocessor:
+            col = self.transform_col_var.get()
+            if col:
+                result = self.preprocessor.standard_scale_column(col)
+                self.data = self.preprocessor.data
+                messagebox.showinfo("Sukses", result)
+                self.show_preprocessing()
+    
+    def handle_minmax_scale(self):
+        """Handle min-max scaling"""
+        if self.preprocessor:
+            col = self.transform_col_var.get()
+            if col:
+                result = self.preprocessor.minmax_scale_column(col)
+                self.data = self.preprocessor.data
+                messagebox.showinfo("Sukses", result)
+                self.show_preprocessing()
+    
+    def handle_pca(self):
+        """Handle PCA"""
+        if self.preprocessor:
+            n_components = self.pca_n_var.get()
+            result = self.preprocessor.apply_pca(n_components)
+            self.data = self.preprocessor.data
+            messagebox.showinfo("Sukses", result)
+            self.show_preprocessing()
+    
+    def handle_split_data(self):
+        """Handle data splitting"""
+        if self.preprocessor:
+            target_col = self.target_col_var.get()
+            test_size = self.test_size_var.get()
+            random_state = self.random_state_var.get()
+            
+            if not target_col:
+                messagebox.showwarning("Peringatan", "Pilih kolom target terlebih dahulu")
+                return
+            
+            self.X_train, self.X_test, self.y_train, self.y_test, result = \
+                self.preprocessor.split_data(target_col, test_size, random_state)
+            
+            if self.X_train is not None:
+                messagebox.showinfo("Sukses", 
+                                  f"{result}\n\n"
+                                  f"Train samples: {len(self.X_train)}\n"
+                                  f"Test samples: {len(self.X_test)}")
+                self.show_preprocessing()
+            else:
+                messagebox.showerror("Error", result)
+    
+    def show_analysis(self):
+        """Show data analysis"""
+        self.clear_content()
+        
+        if self.data is None:
+            tk.Label(self.content_frame, text="Load data terlebih dahulu", 
+                    font=("Arial", 12), bg="white").pack(pady=50)
             return
         
         notebook = ttk.Notebook(self.content_frame)
-        notebook.pack(fill=tk.BOTH, expand=True)
+        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Distribution Analysis
-        dist_frame = ttk.Frame(notebook)
-        notebook.add(dist_frame, text="Distribusi Data")
+        # 1. Basic Statistics
+        stats_frame = ttk.Frame(notebook)
+        notebook.add(stats_frame, text="Statistik")
         
-        # Select column for distribution
-        dist_control = tk.Frame(dist_frame)
-        dist_control.pack(pady=10)
+        stats_text = tk.Text(stats_frame, wrap=tk.WORD)
+        stats_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        tk.Label(dist_control, text="Pilih Kolom:").pack(side=tk.LEFT)
+        numeric_cols = self.data.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) > 0:
+            stats = self.data[numeric_cols].describe()
+            stats_text.insert(tk.END, str(stats))
+        else:
+            stats_text.insert(tk.END, "Tidak ada kolom numerik untuk analisis statistik")
         
-        numeric_cols = self.data.select_dtypes(include=[np.number]).columns.tolist()
-        self.dist_col_var = tk.StringVar(value=numeric_cols[0] if numeric_cols else "")
+        stats_text.config(state=tk.DISABLED)
         
-        dist_combo = ttk.Combobox(dist_control, textvariable=self.dist_col_var,
-                                 values=numeric_cols, width=30)
-        dist_combo.pack(side=tk.LEFT, padx=5)
-        
-        tk.Button(dist_control, text="Tampilkan Histogram",
-                 command=lambda: self.show_histogram(dist_frame)).pack(side=tk.LEFT, padx=5)
-        
-        tk.Button(dist_control, text="Tampilkan Box Plot",
-                 command=lambda: self.show_boxplot(dist_frame)).pack(side=tk.LEFT, padx=5)
-        
-        # Correlation Analysis
+        # 2. Correlation Analysis
         corr_frame = ttk.Frame(notebook)
         notebook.add(corr_frame, text="Korelasi")
         
         tk.Button(corr_frame, text="Tampilkan Heatmap Korelasi",
-                 command=self.show_correlation).pack(pady=20)
+                 command=self.show_correlation_heatmap, width=30, height=2).pack(pady=20)
         
-        # Target Analysis
-        target_frame = ttk.Frame(notebook)
-        notebook.add(target_frame, text="Analisis Target")
+        # 3. Distribution Analysis
+        dist_frame = ttk.Frame(notebook)
+        notebook.add(dist_frame, text="Distribusi")
         
-        if len(self.data.columns) > 0:
-            target_col = self.data.columns[-1]
-            tk.Label(target_frame, text=f"Target Column: {target_col}", 
-                    font=("Arial", 12, "bold")).pack(pady=10)
+        tk.Label(dist_frame, text="Pilih Kolom untuk Analisis Distribusi:", 
+                font=("Arial", 12)).pack(pady=10)
+        
+        numeric_cols = self.data.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) > 0:
+            self.dist_col_var = tk.StringVar(value=numeric_cols[0])
+            dist_combo = ttk.Combobox(dist_frame, textvariable=self.dist_col_var,
+                                     values=list(numeric_cols), width=30)
+            dist_combo.pack(pady=5)
             
-            tk.Button(target_frame, text="Distribusi Target",
-                     command=self.show_target_distribution).pack(pady=5)
-            
-            # For categorical target
-            if self.data[target_col].dtype == 'object' or len(self.data[target_col].unique()) < 10:
-                tk.Button(target_frame, text="Count Plot Target",
-                         command=self.show_target_count).pack(pady=5)
-        
-        # Feature Relationships
-        rel_frame = ttk.Frame(notebook)
-        notebook.add(rel_frame, text="Hubungan Fitur")
-        
-        tk.Button(rel_frame, text="Scatter Plot (2 Fitur)",
-                 command=self.show_scatter).pack(pady=10)
-        
-        # AI Tools Usage Analysis
-        ai_frame = ttk.Frame(notebook)
-        notebook.add(ai_frame, text="Analisis AI Tools")
-        
-        tk.Button(ai_frame, text="Distribusi Penggunaan AI Tools",
-                 command=self.show_ai_tools_dist).pack(pady=10)
-        
-        tk.Button(ai_frame, text="Impact vs Trust Analysis",
-                 command=self.show_impact_trust).pack(pady=10)
+            tk.Button(dist_frame, text="Tampilkan Histogram",
+                     command=self.show_histogram, width=20).pack(pady=5)
+            tk.Button(dist_frame, text="Tampilkan Box Plot",
+                     command=self.show_boxplot, width=20).pack(pady=5)
+        else:
+            tk.Label(dist_frame, text="Tidak ada kolom numerik").pack(pady=20)
     
-    def show_histogram(self, parent):
-        """Show histogram of selected column"""
-        col = self.dist_col_var.get()
-        if col not in self.data.columns:
-            return
-        
-        fig, ax = plt.subplots(figsize=(8, 6))
-        self.data[col].hist(ax=ax, bins=30, edgecolor='black')
-        ax.set_title(f'Distribusi {col}')
-        ax.set_xlabel(col)
-        ax.set_ylabel('Frekuensi')
-        
-        self.display_plot(fig, parent)
-    
-    def show_boxplot(self, parent):
-        """Show box plot of selected column"""
-        col = self.dist_col_var.get()
-        if col not in self.data.columns:
-            return
-        
-        fig, ax = plt.subplots(figsize=(8, 6))
-        self.data[[col]].boxplot(ax=ax)
-        ax.set_title(f'Box Plot {col}')
-        
-        self.display_plot(fig, parent)
-    
-    def show_correlation(self):
+    def show_correlation_heatmap(self):
         """Show correlation heatmap"""
         numeric_data = self.data.select_dtypes(include=[np.number])
         
         if len(numeric_data.columns) < 2:
-            messagebox.showwarning("Warning", "Perlu minimal 2 kolom numerik untuk korelasi")
+            messagebox.showwarning("Peringatan", "Minimal 2 kolom numerik diperlukan")
             return
         
-        fig, ax = plt.subplots(figsize=(10, 8))
+        # Create new window
+        heatmap_window = tk.Toplevel(self.root)
+        heatmap_window.title("Heatmap Korelasi")
+        heatmap_window.geometry("800x600")
+        
+        # Calculate correlation
         corr_matrix = numeric_data.corr()
         
-        # Create heatmap
-        im = ax.imshow(corr_matrix, cmap='coolwarm', vmin=-1, vmax=1)
+        # Create figure
+        fig, ax = plt.subplots(figsize=(10, 8))
+        sns.heatmap(corr_matrix, annot=True, fmt=".2f", cmap="coolwarm", 
+                   square=True, ax=ax, cbar_kws={"shrink": 0.8})
+        ax.set_title("Heatmap Korelasi")
         
-        # Add colorbar
-        plt.colorbar(im, ax=ax)
-        
-        # Set labels
-        ax.set_xticks(range(len(corr_matrix.columns)))
-        ax.set_yticks(range(len(corr_matrix.columns)))
-        ax.set_xticklabels(corr_matrix.columns, rotation=45, ha='right')
-        ax.set_yticklabels(corr_matrix.columns)
-        
-        # Add correlation values
-        for i in range(len(corr_matrix.columns)):
-            for j in range(len(corr_matrix.columns)):
-                text = ax.text(j, i, f'{corr_matrix.iloc[i, j]:.2f}',
-                             ha="center", va="center", color="w")
-        
-        ax.set_title('Heatmap Korelasi')
-        plt.tight_layout()
-        
-        # Create new window for plot
-        plot_window = tk.Toplevel(self.root)
-        plot_window.title("Correlation Heatmap")
-        
-        canvas = FigureCanvasTkAgg(fig, plot_window)
+        # Embed in tkinter
+        canvas = FigureCanvasTkAgg(fig, heatmap_window)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-    
-    def show_target_distribution(self):
-        """Show target variable distribution"""
-        target_col = self.data.columns[-1]
         
+        # Add close button
+        tk.Button(heatmap_window, text="Tutup", 
+                 command=heatmap_window.destroy).pack(pady=10)
+    
+    def show_histogram(self):
+        """Show histogram of selected column"""
+        col = self.dist_col_var.get()
+        
+        if col not in self.data.columns:
+            return
+        
+        # Create new window
+        hist_window = tk.Toplevel(self.root)
+        hist_window.title(f"Histogram - {col}")
+        hist_window.geometry("600x500")
+        
+        # Create figure
         fig, ax = plt.subplots(figsize=(8, 6))
+        self.data[col].hist(bins=30, ax=ax, edgecolor='black', color='skyblue')
+        ax.set_title(f"Distribusi {col}")
+        ax.set_xlabel(col)
+        ax.set_ylabel("Frekuensi")
         
-        if self.data[target_col].dtype == 'object' or len(self.data[target_col].unique()) < 10:
-            # For categorical target
-            self.data[target_col].value_counts().plot(kind='bar', ax=ax, color='skyblue', edgecolor='black')
-            ax.set_title(f'Distribusi Target ({target_col})')
-            ax.set_xlabel(target_col)
-            ax.set_ylabel('Count')
-            plt.xticks(rotation=45)
-        else:
-            # For continuous target
-            self.data[target_col].hist(ax=ax, bins=30, edgecolor='black', color='lightgreen')
-            ax.set_title(f'Distribusi Target ({target_col})')
-            ax.set_xlabel(target_col)
-            ax.set_ylabel('Frekuensi')
+        # Add statistics
+        mean_val = self.data[col].mean()
+        median_val = self.data[col].median()
+        ax.axvline(mean_val, color='red', linestyle='--', label=f'Mean: {mean_val:.2f}')
+        ax.axvline(median_val, color='green', linestyle='--', label=f'Median: {median_val:.2f}')
+        ax.legend()
         
-        plt.tight_layout()
-        
-        # Create new window for plot
-        plot_window = tk.Toplevel(self.root)
-        plot_window.title("Target Distribution")
-        
-        canvas = FigureCanvasTkAgg(fig, plot_window)
+        # Embed in tkinter
+        canvas = FigureCanvasTkAgg(fig, hist_window)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-    
-    def show_target_count(self):
-        """Show count plot for categorical target"""
-        target_col = self.data.columns[-1]
         
-        if self.data[target_col].dtype != 'object' and len(self.data[target_col].unique()) >= 10:
-            messagebox.showinfo("Info", "Target bukan kategorikal")
+        # Add close button
+        tk.Button(hist_window, text="Tutup", 
+                 command=hist_window.destroy).pack(pady=10)
+    
+    def show_boxplot(self):
+        """Show box plot of selected column"""
+        col = self.dist_col_var.get()
+        
+        if col not in self.data.columns:
             return
         
+        # Create new window
+        box_window = tk.Toplevel(self.root)
+        box_window.title(f"Box Plot - {col}")
+        box_window.geometry("600x500")
+        
+        # Create figure
         fig, ax = plt.subplots(figsize=(8, 6))
-        self.data[target_col].value_counts().plot(kind='pie', autopct='%1.1f%%', ax=ax)
-        ax.set_title(f'Persentase Target ({target_col})')
-        ax.set_ylabel('')
+        self.data[[col]].boxplot(ax=ax)
+        ax.set_title(f"Box Plot {col}")
+        ax.set_ylabel(col)
         
-        # Create new window for plot
-        plot_window = tk.Toplevel(self.root)
-        plot_window.title("Target Percentage")
-        
-        canvas = FigureCanvasTkAgg(fig, plot_window)
+        # Embed in tkinter
+        canvas = FigureCanvasTkAgg(fig, box_window)
         canvas.draw()
         canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-    
-    def show_scatter(self):
-        """Show scatter plot between two features"""
-        numeric_cols = self.data.select_dtypes(include=[np.number]).columns.tolist()
         
-        if len(numeric_cols) < 2:
-            messagebox.showwarning("Warning", "Perlu minimal 2 kolom numerik")
-            return
-        
-        # Dialog to select two columns
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Pilih Dua Fitur")
-        dialog.geometry("300x150")
-        
-        tk.Label(dialog, text="Fitur X:").pack()
-        x_var = tk.StringVar(value=numeric_cols[0])
-        ttk.Combobox(dialog, textvariable=x_var, values=numeric_cols).pack()
-        
-        tk.Label(dialog, text="Fitur Y:").pack()
-        y_var = tk.StringVar(value=numeric_cols[1] if len(numeric_cols) > 1 else numeric_cols[0])
-        ttk.Combobox(dialog, textvariable=y_var, values=numeric_cols).pack()
-        
-        def plot_scatter():
-            x_col = x_var.get()
-            y_col = y_var.get()
-            
-            fig, ax = plt.subplots(figsize=(8, 6))
-            ax.scatter(self.data[x_col], self.data[y_col], alpha=0.6)
-            ax.set_xlabel(x_col)
-            ax.set_ylabel(y_col)
-            ax.set_title(f'Scatter Plot: {x_col} vs {y_col}')
-            
-            # Add regression line
-            try:
-                z = np.polyfit(self.data[x_col], self.data[y_col], 1)
-                p = np.poly1d(z)
-                ax.plot(self.data[x_col], p(self.data[x_col]), "r--", alpha=0.8)
-            except:
-                pass
-            
-            plt.tight_layout()
-            
-            # Create new window for plot
-            plot_window = tk.Toplevel(self.root)
-            plot_window.title("Scatter Plot")
-            
-            canvas = FigureCanvasTkAgg(fig, plot_window)
-            canvas.draw()
-            canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-            
-            dialog.destroy()
-        
-        tk.Button(dialog, text="Plot", command=plot_scatter).pack(pady=10)
-    
-    def show_ai_tools_dist(self):
-        """Show distribution of AI tools usage"""
-        # Look for AI tools column (assuming column names contain 'AI' or 'Tools')
-        ai_cols = [col for col in self.data.columns if any(keyword in col.lower() 
-                   for keyword in ['ai', 'tool', 'usage', 'gemini', 'chatgpt', 'copilot'])]
-        
-        if not ai_cols:
-            messagebox.showinfo("Info", "Kolom AI tools tidak ditemukan")
-            return
-        
-        ai_col = ai_cols[0]
-        
-        fig, ax = plt.subplots(figsize=(10, 6))
-        
-        if self.data[ai_col].dtype == 'object' or len(self.data[ai_col].unique()) < 10:
-            # Categorical AI tools
-            self.data[ai_col].value_counts().plot(kind='bar', ax=ax, color='orange', edgecolor='black')
-            ax.set_title('Distribusi Penggunaan AI Tools')
-            ax.set_xlabel('AI Tools')
-            ax.set_ylabel('Jumlah Pengguna')
-            plt.xticks(rotation=45)
-        else:
-            # Numerical usage data
-            self.data[ai_col].hist(ax=ax, bins=30, edgecolor='black', color='lightblue')
-            ax.set_title('Distribusi Penggunaan AI Tools')
-            ax.set_xlabel('Intensitas Penggunaan')
-            ax.set_ylabel('Frekuensi')
-        
-        plt.tight_layout()
-        
-        # Create new window for plot
-        plot_window = tk.Toplevel(self.root)
-        plot_window.title("AI Tools Distribution")
-        
-        canvas = FigureCanvasTkAgg(fig, plot_window)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-    
-    def show_impact_trust(self):
-        """Show relationship between impact and trust"""
-        # Look for impact and trust columns
-        impact_cols = [col for col in self.data.columns if 'impact' in col.lower()]
-        trust_cols = [col for col in self.data.columns if 'trust' in col.lower()]
-        
-        if not impact_cols or not trust_cols:
-            messagebox.showinfo("Info", "Kolom impact atau trust tidak ditemukan")
-            return
-        
-        impact_col = impact_cols[0]
-        trust_col = trust_cols[0]
-        
-        fig, ax = plt.subplots(figsize=(8, 6))
-        
-        # Scatter plot
-        scatter = ax.scatter(self.data[trust_col], self.data[impact_col], 
-                           alpha=0.6, c='purple')
-        ax.set_xlabel(trust_col)
-        ax.set_ylabel(impact_col)
-        ax.set_title(f'Hubungan {trust_col} vs {impact_col}')
-        
-        # Add regression line
-        try:
-            z = np.polyfit(self.data[trust_col], self.data[impact_col], 1)
-            p = np.poly1d(z)
-            ax.plot(self.data[trust_col], p(self.data[trust_col]), "r--", alpha=0.8)
-        except:
-            pass
-        
-        plt.tight_layout()
-        
-        # Create new window for plot
-        plot_window = tk.Toplevel(self.root)
-        plot_window.title("Impact vs Trust Analysis")
-        
-        canvas = FigureCanvasTkAgg(fig, plot_window)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-    
-    def display_plot(self, fig, parent):
-        """Display matplotlib figure in Tkinter frame"""
-        # Clear previous plot
-        for widget in parent.winfo_children():
-            if widget not in [child for child in parent.winfo_children() 
-                            if isinstance(child, tk.Frame)]:
-                widget.destroy()
-        
-        # Create canvas
-        canvas = FigureCanvasTkAgg(fig, parent)
-        canvas.draw()
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        # Add close button
+        tk.Button(box_window, text="Tutup", 
+                 command=box_window.destroy).pack(pady=10)
     
     def train_model(self):
-        """Train Random Forest model"""
+        """Train Random Forest model (teacher only)"""
         if not self.is_teacher:
-            messagebox.showwarning("Access Denied", "Hanya guru yang dapat melatih model")
+            messagebox.showwarning("Akses Ditolak", "Hanya guru yang dapat melatih model")
             return
         
         if self.X_train is None or self.y_train is None:
-            messagebox.showwarning("Warning", "Split data terlebih dahulu")
+            messagebox.showwarning("Peringatan", "Split data terlebih dahulu")
             return
         
         self.clear_content()
         
-        tk.Label(self.content_frame, text="Training Random Forest Model", 
-                font=("Arial", 14, "bold")).pack(pady=10)
+        tk.Label(self.content_frame, text="TRAINING RANDOM FOREST MODEL", 
+                font=("Arial", 16, "bold"), bg="white").pack(pady=10)
         
         # Model configuration
-        config_frame = tk.Frame(self.content_frame)
-        config_frame.pack(pady=10)
+        config_frame = tk.Frame(self.content_frame, bg="white")
+        config_frame.pack(pady=20)
         
-        tk.Label(config_frame, text="n_estimators:").grid(row=0, column=0, sticky=tk.W, padx=5)
+        tk.Label(config_frame, text="Parameter Model:", 
+                font=("Arial", 12, "bold"), bg="white").grid(row=0, column=0, columnspan=2, pady=10)
+        
+        # n_estimators
+        tk.Label(config_frame, text="n_estimators:", bg="white").grid(row=1, column=0, sticky=tk.W, pady=5)
         self.n_estimators_var = tk.IntVar(value=100)
-        tk.Entry(config_frame, textvariable=self.n_estimators_var, width=10).grid(row=0, column=1, padx=5)
+        tk.Entry(config_frame, textvariable=self.n_estimators_var, width=15).grid(row=1, column=1, pady=5, padx=10)
         
-        tk.Label(config_frame, text="max_depth:").grid(row=1, column=0, sticky=tk.W, padx=5)
+        # max_depth
+        tk.Label(config_frame, text="max_depth (None untuk unlimited):", bg="white").grid(row=2, column=0, sticky=tk.W, pady=5)
         self.max_depth_var = tk.StringVar(value="None")
-        tk.Entry(config_frame, textvariable=self.max_depth_var, width=10).grid(row=1, column=1, padx=5)
+        tk.Entry(config_frame, textvariable=self.max_depth_var, width=15).grid(row=2, column=1, pady=5, padx=10)
         
-        tk.Label(config_frame, text="random_state:").grid(row=2, column=0, sticky=tk.W, padx=5)
+        # random_state
+        tk.Label(config_frame, text="random_state:", bg="white").grid(row=3, column=0, sticky=tk.W, pady=5)
         self.rf_random_state_var = tk.IntVar(value=42)
-        tk.Entry(config_frame, textvariable=self.rf_random_state_var, width=10).grid(row=2, column=1, padx=5)
+        tk.Entry(config_frame, textvariable=self.rf_random_state_var, width=15).grid(row=3, column=1, pady=5, padx=10)
         
-        # Check if classification or regression
-        target_unique = len(np.unique(self.y_train))
-        
-        if target_unique < 10:  # Classification
-            self.problem_type = "classification"
-            tk.Label(config_frame, text="Problem Type: Classification").grid(row=3, column=0, columnspan=2, pady=5)
-        else:  # Regression
-            self.problem_type = "regression"
-            tk.Label(config_frame, text="Problem Type: Regression").grid(row=3, column=0, columnspan=2, pady=5)
+        # Problem type detection
+        unique_classes = len(np.unique(self.y_train))
+        problem_type = "Klasifikasi" if unique_classes < 10 else "Regresi"
+        tk.Label(config_frame, text=f"Tipe Problem: {problem_type}", 
+                font=("Arial", 10, "italic"), bg="white").grid(row=4, column=0, columnspan=2, pady=10)
         
         # Train button
         tk.Button(self.content_frame, text="Train Model", 
                  command=self.execute_training,
-                 width=20, height=2, bg="green", fg="white").pack(pady=20)
+                 width=20, height=2, bg="green", fg="white",
+                 font=("Arial", 12)).pack(pady=20)
         
-        # Progress/result area
-        self.result_text = tk.Text(self.content_frame, height=15, width=80)
+        # Result area
+        self.result_text = tk.Text(self.content_frame, height=20, width=80)
         self.result_text.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
         
         scrollbar = tk.Scrollbar(self.result_text)
@@ -1051,278 +1034,278 @@ class StudentAIAnalysisApp:
         scrollbar.config(command=self.result_text.yview)
     
     def execute_training(self):
-        """Execute the model training"""
+        """Execute model training"""
         try:
             # Get parameters
             n_estimators = self.n_estimators_var.get()
             max_depth = None if self.max_depth_var.get() == "None" else int(self.max_depth_var.get())
             random_state = self.rf_random_state_var.get()
             
-            # Scale the features
-            X_train_scaled = self.X_train.copy()
-            X_test_scaled = self.X_test.copy()
-            
-            numeric_cols = self.X_train.select_dtypes(include=[np.number]).columns
-            if len(numeric_cols) > 0:
-                X_train_scaled[numeric_cols] = self.scaler.transform(self.X_train[numeric_cols])
-                X_test_scaled[numeric_cols] = self.scaler.transform(self.X_test[numeric_cols])
-            
             # Train model
-            if self.problem_type == "classification":
-                self.model = RandomForestClassifier(
-                    n_estimators=n_estimators,
-                    max_depth=max_depth,
-                    random_state=random_state,
-                    n_jobs=-1
-                )
-            else:
-                self.model = RandomForestRegressor(
-                    n_estimators=n_estimators,
-                    max_depth=max_depth,
-                    random_state=random_state,
-                    n_jobs=-1
-                )
-            
-            self.model.fit(X_train_scaled, self.y_train)
+            result = self.model.train(self.X_train, self.y_train, 
+                                     n_estimators, max_depth, random_state)
             
             # Make predictions
-            y_pred = self.model.predict(X_test_scaled)
+            predictions, _ = self.model.predict(self.X_test)
             
             # Display results
             self.result_text.delete(1.0, tk.END)
-            self.result_text.insert(tk.END, "=== TRAINING RESULTS ===\n\n")
-            self.result_text.insert(tk.END, f"Model: Random Forest ({self.problem_type})\n")
+            self.result_text.insert(tk.END, "=== HASIL TRAINING ===\n\n")
+            self.result_text.insert(tk.END, f"{result}\n\n")
             self.result_text.insert(tk.END, f"n_estimators: {n_estimators}\n")
             self.result_text.insert(tk.END, f"max_depth: {max_depth}\n")
             self.result_text.insert(tk.END, f"Training samples: {len(self.X_train)}\n")
             self.result_text.insert(tk.END, f"Test samples: {len(self.X_test)}\n\n")
             
-            if self.problem_type == "classification":
-                accuracy = accuracy_score(self.y_test, y_pred)
-                precision = precision_score(self.y_test, y_pred, average='weighted', zero_division=0)
-                recall = recall_score(self.y_test, y_pred, average='weighted', zero_division=0)
-                f1 = f1_score(self.y_test, y_pred, average='weighted', zero_division=0)
-                
-                self.result_text.insert(tk.END, "=== CLASSIFICATION METRICS ===\n")
-                self.result_text.insert(tk.END, f"Accuracy: {accuracy:.4f}\n")
-                self.result_text.insert(tk.END, f"Precision: {precision:.4f}\n")
-                self.result_text.insert(tk.END, f"Recall: {recall:.4f}\n")
-                self.result_text.insert(tk.END, f"F1-Score: {f1:.4f}\n")
-                
-                # Store metrics for later use
-                self.metrics = {
-                    'accuracy': accuracy,
-                    'precision': precision,
-                    'recall': recall,
-                    'f1': f1
-                }
-            else:
-                mse = mean_squared_error(self.y_test, y_pred)
-                mae = mean_absolute_error(self.y_test, y_pred)
-                rmse = np.sqrt(mse)
-                
-                self.result_text.insert(tk.END, "=== REGRESSION METRICS ===\n")
-                self.result_text.insert(tk.END, f"MSE: {mse:.4f}\n")
-                self.result_text.insert(tk.END, f"MAE: {mae:.4f}\n")
-                self.result_text.insert(tk.END, f"RMSE: {rmse:.4f}\n")
-                
-                # Store metrics
-                self.metrics = {
-                    'mse': mse,
-                    'mae': mae,
-                    'rmse': rmse
-                }
-            
             # Feature importance
-            self.result_text.insert(tk.END, "\n=== FEATURE IMPORTANCE ===\n")
-            feature_importance = pd.DataFrame({
-                'feature': self.X_train.columns,
-                'importance': self.model.feature_importances_
-            }).sort_values('importance', ascending=False)
+            feature_importance = self.model.get_feature_importance(self.X_train.columns)
+            if feature_importance is not None:
+                self.result_text.insert(tk.END, "=== FEATURE IMPORTANCE (Top 10) ===\n")
+                for i, row in feature_importance.head(10).iterrows():
+                    self.result_text.insert(tk.END, f"{row['feature']}: {row['importance']:.4f}\n")
             
-            for i, row in feature_importance.head(10).iterrows():
-                self.result_text.insert(tk.END, f"{row['feature']}: {row['importance']:.4f}\n")
-            
-            self.status_var.set("Status: Model training completed successfully")
+            self.status_var.set("Status: Model berhasil dilatih")
             
         except Exception as e:
-            messagebox.showerror("Training Error", str(e))
+            messagebox.showerror("Error Training", f"Terjadi error:\n{str(e)}")
     
     def evaluate_model(self):
-        """Evaluate the trained model"""
+        """Evaluate model (teacher only)"""
         if not self.is_teacher:
-            messagebox.showwarning("Access Denied", "Hanya guru yang dapat mengevaluasi model")
+            messagebox.showwarning("Akses Ditolak", "Hanya guru yang dapat mengevaluasi model")
             return
         
-        if self.model is None:
-            messagebox.showwarning("Warning", "Train model terlebih dahulu")
+        if self.model.model is None:
+            messagebox.showwarning("Peringatan", "Train model terlebih dahulu")
             return
         
         self.clear_content()
         
-        tk.Label(self.content_frame, text="Model Evaluation", 
-                font=("Arial", 14, "bold")).pack(pady=10)
+        tk.Label(self.content_frame, text="EVALUASI MODEL", 
+                font=("Arial", 16, "bold"), bg="white").pack(pady=10)
         
-        # Create notebook for different evaluation views
-        notebook = ttk.Notebook(self.content_frame)
-        notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # Evaluate model
+        results = self.model.evaluate(self.X_test, self.y_test)
         
-        # Metrics tab
-        metrics_frame = ttk.Frame(notebook)
-        notebook.add(metrics_frame, text="Metrics")
+        # Display results
+        result_text = tk.Text(self.content_frame, height=25, width=80)
+        result_text.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
         
-        metrics_text = tk.Text(metrics_frame, wrap=tk.NONE)
-        metrics_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        result_text.insert(tk.END, "=== HASIL EVALUASI ===\n\n")
         
-        # Scale test data
-        X_test_scaled = self.X_test.copy()
-        numeric_cols = self.X_test.select_dtypes(include=[np.number]).columns
-        if len(numeric_cols) > 0:
-            X_test_scaled[numeric_cols] = self.scaler.transform(self.X_test[numeric_cols])
-        
-        # Make predictions
-        y_pred = self.model.predict(X_test_scaled)
-        
-        if self.problem_type == "classification":
-            # Detailed classification report
-            report = classification_report(self.y_test, y_pred, output_dict=False)
-            metrics_text.insert(tk.END, "=== CLASSIFICATION REPORT ===\n\n")
-            metrics_text.insert(tk.END, report)
+        if self.model.problem_type == "classification":
+            # Classification metrics
+            metrics = results['metrics']
+            result_text.insert(tk.END, "=== METRIK KLASIFIKASI ===\n")
+            result_text.insert(tk.END, f"Akurasi: {metrics['accuracy']:.4f}\n")
+            result_text.insert(tk.END, f"Presisi: {metrics['precision']:.4f}\n")
+            result_text.insert(tk.END, f"Recall: {metrics['recall']:.4f}\n")
+            result_text.insert(tk.END, f"F1-Score: {metrics['f1_score']:.4f}\n\n")
             
-            # Confusion matrix
-            cm = confusion_matrix(self.y_test, y_pred)
+            # Classification report
+            report = results['classification_report']
+            result_text.insert(tk.END, "=== LAPORAN KLASIFIKASI ===\n")
+            for key, value in report.items():
+                if isinstance(value, dict):
+                    result_text.insert(tk.END, f"\n{key}:\n")
+                    for k, v in value.items():
+                        result_text.insert(tk.END, f"  {k}: {v:.4f}\n")
+                else:
+                    result_text.insert(tk.END, f"{key}: {value:.4f}\n")
             
-            # Create confusion matrix visualization
-            cm_frame = ttk.Frame(notebook)
-            notebook.add(cm_frame, text="Confusion Matrix")
-            
-            fig, ax = plt.subplots(figsize=(8, 6))
-            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax)
-            ax.set_xlabel('Predicted')
-            ax.set_ylabel('Actual')
-            ax.set_title('Confusion Matrix')
-            
-            canvas = FigureCanvasTkAgg(fig, cm_frame)
-            canvas.draw()
-            canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            # Button to show confusion matrix
+            tk.Button(self.content_frame, text="Tampilkan Confusion Matrix",
+                     command=self.show_confusion_matrix, width=25).pack(pady=10)
             
         else:
             # Regression metrics
-            mse = mean_squared_error(self.y_test, y_pred)
-            mae = mean_absolute_error(self.y_test, y_pred)
-            rmse = np.sqrt(mse)
+            metrics = results['metrics']
+            result_text.insert(tk.END, "=== METRIK REGRESI ===\n")
+            result_text.insert(tk.END, f"MSE: {metrics['mse']:.4f}\n")
+            result_text.insert(tk.END, f"MAE: {metrics['mae']:.4f}\n")
+            result_text.insert(tk.END, f"RMSE: {metrics['rmse']:.4f}\n\n")
             
-            metrics_text.insert(tk.END, "=== REGRESSION METRICS ===\n\n")
-            metrics_text.insert(tk.END, f"MSE: {mse:.4f}\n")
-            metrics_text.insert(tk.END, f"MAE: {mae:.4f}\n")
-            metrics_text.insert(tk.END, f"RMSE: {rmse:.4f}\n\n")
-            
-            # Residual plot
-            residuals = self.y_test - y_pred
-            
-            residual_frame = ttk.Frame(notebook)
-            notebook.add(residual_frame, text="Residual Analysis")
-            
-            fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-            
-            # Residuals vs Predicted
-            axes[0].scatter(y_pred, residuals, alpha=0.6)
-            axes[0].axhline(y=0, color='r', linestyle='--')
-            axes[0].set_xlabel('Predicted Values')
-            axes[0].set_ylabel('Residuals')
-            axes[0].set_title('Residuals vs Predicted')
-            
-            # Histogram of residuals
-            axes[1].hist(residuals, bins=30, edgecolor='black')
-            axes[1].set_xlabel('Residuals')
-            axes[1].set_ylabel('Frequency')
-            axes[1].set_title('Distribution of Residuals')
-            
-            plt.tight_layout()
-            
-            canvas = FigureCanvasTkAgg(fig, residual_frame)
-            canvas.draw()
-            canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            # Button to show residual plot
+            tk.Button(self.content_frame, text="Tampilkan Residual Plot",
+                     command=self.show_residual_plot, width=25).pack(pady=10)
         
-        metrics_text.config(state=tk.DISABLED)
+        result_text.config(state=tk.DISABLED)
         
-        # Feature importance visualization
-        if hasattr(self.model, 'feature_importances_'):
-            feat_frame = ttk.Frame(notebook)
-            notebook.add(feat_frame, text="Feature Importance")
-            
-            feature_importance = pd.DataFrame({
-                'feature': self.X_train.columns,
-                'importance': self.model.feature_importances_
-            }).sort_values('importance', ascending=True)
-            
-            fig, ax = plt.subplots(figsize=(10, 8))
-            ax.barh(range(len(feature_importance)), feature_importance['importance'])
-            ax.set_yticks(range(len(feature_importance)))
-            ax.set_yticklabels(feature_importance['feature'])
-            ax.set_xlabel('Importance')
-            ax.set_title('Feature Importance')
-            
-            plt.tight_layout()
-            
-            canvas = FigureCanvasTkAgg(fig, feat_frame)
-            canvas.draw()
-            canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        # Feature importance visualization button
+        tk.Button(self.content_frame, text="Tampilkan Feature Importance",
+                 command=self.show_feature_importance, width=25).pack(pady=10)
     
-    def predict_data(self):
-        """Make predictions on new data (for students)"""
-        self.clear_content()
-        
-        if self.model is None:
-            tk.Label(self.content_frame, text="Model belum dilatih. Guru harus melatih model terlebih dahulu.").pack(pady=20)
+    def show_confusion_matrix(self):
+        """Show confusion matrix visualization"""
+        if self.model.problem_type != "classification":
             return
         
-        tk.Label(self.content_frame, text="Prediksi Data Baru", 
-                font=("Arial", 14, "bold")).pack(pady=10)
+        results = self.model.evaluate(self.X_test, self.y_test)
+        cm = np.array(results['confusion_matrix'])
         
-        # Create input form based on features
-        input_frame = tk.Frame(self.content_frame)
-        input_frame.pack(pady=10)
+        # Create new window
+        cm_window = tk.Toplevel(self.root)
+        cm_window.title("Confusion Matrix")
+        cm_window.geometry("700x600")
+        
+        # Create figure
+        fig, ax = plt.subplots(figsize=(8, 6))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax)
+        ax.set_xlabel('Predicted')
+        ax.set_ylabel('Actual')
+        ax.set_title('Confusion Matrix')
+        
+        # Embed in tkinter
+        canvas = FigureCanvasTkAgg(fig, cm_window)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        # Add close button
+        tk.Button(cm_window, text="Tutup", 
+                 command=cm_window.destroy).pack(pady=10)
+    
+    def show_residual_plot(self):
+        """Show residual plot for regression"""
+        if self.model.problem_type != "regression":
+            return
+        
+        results = self.model.evaluate(self.X_test, self.y_test)
+        predictions = np.array(results['predictions'])
+        residuals = np.array(results['residuals'])
+        
+        # Create new window
+        residual_window = tk.Toplevel(self.root)
+        residual_window.title("Residual Analysis")
+        residual_window.geometry("900x600")
+        
+        # Create figure with subplots
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Residuals vs Predicted
+        axes[0].scatter(predictions, residuals, alpha=0.6)
+        axes[0].axhline(y=0, color='r', linestyle='--')
+        axes[0].set_xlabel('Predicted Values')
+        axes[0].set_ylabel('Residuals')
+        axes[0].set_title('Residuals vs Predicted')
+        
+        # Histogram of residuals
+        axes[1].hist(residuals, bins=30, edgecolor='black', color='skyblue')
+        axes[1].set_xlabel('Residuals')
+        axes[1].set_ylabel('Frequency')
+        axes[1].set_title('Distribution of Residuals')
+        
+        plt.tight_layout()
+        
+        # Embed in tkinter
+        canvas = FigureCanvasTkAgg(fig, residual_window)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        # Add close button
+        tk.Button(residual_window, text="Tutup", 
+                 command=residual_window.destroy).pack(pady=10)
+    
+    def show_feature_importance(self):
+        """Show feature importance visualization"""
+        feature_importance = self.model.get_feature_importance(self.X_train.columns)
+        
+        if feature_importance is None:
+            return
+        
+        # Create new window
+        fi_window = tk.Toplevel(self.root)
+        fi_window.title("Feature Importance")
+        fi_window.geometry("800x600")
+        
+        # Get top 15 features
+        top_features = feature_importance.head(15)
+        
+        # Create figure
+        fig, ax = plt.subplots(figsize=(10, 8))
+        y_pos = np.arange(len(top_features))
+        
+        ax.barh(y_pos, top_features['importance'], color='steelblue')
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(top_features['feature'])
+        ax.invert_yaxis()  # highest importance at top
+        ax.set_xlabel('Importance')
+        ax.set_title('Feature Importance (Top 15)')
+        
+        plt.tight_layout()
+        
+        # Embed in tkinter
+        canvas = FigureCanvasTkAgg(fig, fi_window)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        
+        # Add close button
+        tk.Button(fi_window, text="Tutup", 
+                 command=fi_window.destroy).pack(pady=10)
+    
+    def show_prediction(self):
+        """Show prediction interface"""
+        self.clear_content()
+        
+        if self.model.model is None:
+            tk.Label(self.content_frame, text="Model belum dilatih. Guru harus melatih model terlebih dahulu.", 
+                    font=("Arial", 12), bg="white").pack(pady=50)
+            return
+        
+        tk.Label(self.content_frame, text="PREDIKSI DATA BARU", 
+                font=("Arial", 16, "bold"), bg="white").pack(pady=10)
+        
+        # Create input form
+        input_frame = tk.Frame(self.content_frame, bg="white")
+        input_frame.pack(pady=20)
         
         self.input_vars = {}
         
-        # Get feature names from training data
+        # Get sample from training data
+        sample_row = self.X_train.iloc[0] if len(self.X_train) > 0 else pd.Series()
+        
+        # Create input fields for each feature
         for i, col in enumerate(self.X_train.columns):
-            tk.Label(input_frame, text=f"{col}:").grid(row=i, column=0, sticky=tk.W, padx=5, pady=2)
+            tk.Label(input_frame, text=f"{col}:", bg="white").grid(row=i, column=0, sticky=tk.W, pady=5, padx=5)
             
-            # Get sample value for placeholder
-            sample_val = self.X_train[col].iloc[0] if len(self.X_train) > 0 else 0
+            # Get sample value
+            sample_val = sample_row[col] if col in sample_row else 0
             
+            # Create appropriate input widget
             if self.X_train[col].dtype == 'object' or len(self.X_train[col].unique()) < 10:
-                # Categorical feature - use combobox
-                unique_vals = self.X_train[col].unique()[:20]  # Limit to 20 values
+                # Categorical - use combobox
+                unique_vals = self.X_train[col].unique()[:20]
                 var = tk.StringVar(value=str(sample_val))
-                combo = ttk.Combobox(input_frame, textvariable=var, values=list(unique_vals), width=30)
-                combo.grid(row=i, column=1, padx=5, pady=2)
-                self.input_vars[col] = var
+                combo = ttk.Combobox(input_frame, textvariable=var, 
+                                    values=list(unique_vals), width=30)
+                combo.grid(row=i, column=1, pady=5, padx=5)
             else:
-                # Numerical feature - use entry
+                # Numerical - use entry
                 var = tk.DoubleVar(value=float(sample_val) if pd.notna(sample_val) else 0)
-                tk.Entry(input_frame, textvariable=var, width=30).grid(row=i, column=1, padx=5, pady=2)
-                self.input_vars[col] = var
+                entry = tk.Entry(input_frame, textvariable=var, width=33)
+                entry.grid(row=i, column=1, pady=5, padx=5)
+            
+            self.input_vars[col] = var
         
         # Predict button
         tk.Button(self.content_frame, text="Predict", 
                  command=self.make_prediction,
-                 width=20, height=2, bg="blue", fg="white").pack(pady=20)
+                 width=20, height=2, bg="blue", fg="white",
+                 font=("Arial", 12)).pack(pady=20)
         
         # Result display
-        self.prediction_result = tk.Text(self.content_frame, height=5, width=60)
+        self.prediction_result = tk.Text(self.content_frame, height=8, width=60)
         self.prediction_result.pack(pady=10, padx=10)
-        self.prediction_result.insert(tk.END, "Hasil prediksi akan ditampilkan di sini...")
+        self.prediction_result.insert(tk.END, "Hasil prediksi akan muncul di sini...")
         self.prediction_result.config(state=tk.DISABLED)
         
-        # Batch prediction option
-        batch_frame = tk.Frame(self.content_frame)
+        # Batch prediction
+        batch_frame = tk.Frame(self.content_frame, bg="white")
         batch_frame.pack(pady=10)
         
         tk.Button(batch_frame, text="Prediksi dari File CSV", 
-                 command=self.predict_from_file).pack(pady=5)
+                 command=self.predict_from_file, width=20).pack(side=tk.LEFT, padx=10)
+        tk.Button(batch_frame, text="Reset Input", 
+                 command=self.reset_prediction_input, width=20).pack(side=tk.LEFT, padx=10)
     
     def make_prediction(self):
         """Make prediction based on input values"""
@@ -1341,61 +1324,37 @@ class StudentAIAnalysisApp:
                     except:
                         input_data[col] = 0.0
             
-            # Create DataFrame
-            input_df = pd.DataFrame([input_data])
-            
-            # Handle categorical encoding
-            for col in input_df.columns:
-                if col in self.le_dict:
-                    # Transform using saved label encoder
-                    try:
-                        input_df[col] = self.le_dict[col].transform(input_df[col].astype(str))
-                    except:
-                        # If new category, assign -1
-                        input_df[col] = -1
-            
-            # Scale numerical features
-            numeric_cols = self.X_train.select_dtypes(include=[np.number]).columns
-            if len(numeric_cols) > 0:
-                input_df[numeric_cols] = self.scaler.transform(input_df[numeric_cols])
-            
-            # Ensure all columns are present
-            for col in self.X_train.columns:
-                if col not in input_df.columns:
-                    input_df[col] = 0
-            
-            input_df = input_df[self.X_train.columns]
-            
             # Make prediction
-            prediction = self.model.predict(input_df)
+            prediction, probabilities = self.model.predict_single(input_data)
             
             # Display result
             self.prediction_result.config(state=tk.NORMAL)
             self.prediction_result.delete(1.0, tk.END)
             
-            if self.problem_type == "classification":
-                # For classification, show class probabilities if available
-                self.prediction_result.insert(tk.END, f"Predicted Class: {prediction[0]}\n\n")
+            if self.model.problem_type == "classification":
+                self.prediction_result.insert(tk.END, f"Hasil Prediksi: Kelas {prediction}\n\n")
                 
-                if hasattr(self.model, 'predict_proba'):
-                    probabilities = self.model.predict_proba(input_df)[0]
-                    self.prediction_result.insert(tk.END, "Class Probabilities:\n")
+                if probabilities is not None:
+                    self.prediction_result.insert(tk.END, "Probabilitas Kelas:\n")
                     for i, prob in enumerate(probabilities):
-                        self.prediction_result.insert(tk.END, f"  Class {i}: {prob:.4f}\n")
+                        self.prediction_result.insert(tk.END, f"  Kelas {i}: {prob:.4f}\n")
             else:
-                # For regression
-                self.prediction_result.insert(tk.END, f"Predicted Value: {prediction[0]:.4f}\n")
+                self.prediction_result.insert(tk.END, f"Hasil Prediksi: {prediction:.4f}\n")
             
             self.prediction_result.config(state=tk.DISABLED)
             
         except Exception as e:
-            messagebox.showerror("Prediction Error", str(e))
+            messagebox.showerror("Error Prediksi", f"Terjadi error:\n{str(e)}")
     
     def predict_from_file(self):
         """Make predictions from CSV file"""
+        if self.model.model is None:
+            messagebox.showwarning("Peringatan", "Model belum dilatih")
+            return
+        
         file_path = filedialog.askopenfilename(
-            title="Pilih file data untuk prediksi",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+            title="Pilih file CSV untuk prediksi",
+            filetypes=[("CSV files", "*.csv")]
         )
         
         if file_path:
@@ -1403,31 +1362,18 @@ class StudentAIAnalysisApp:
                 # Load data
                 new_data = pd.read_csv(file_path)
                 
-                # Preprocess similar to training data
-                processed_data = new_data.copy()
+                # Check if all required columns are present
+                missing_cols = set(self.X_train.columns) - set(new_data.columns)
+                if missing_cols:
+                    messagebox.showwarning("Peringatan", 
+                                         f"Kolom berikut tidak ditemukan: {missing_cols}")
+                    return
                 
-                # Handle categorical encoding
-                for col in processed_data.columns:
-                    if col in self.le_dict:
-                        try:
-                            processed_data[col] = self.le_dict[col].transform(processed_data[col].astype(str))
-                        except:
-                            processed_data[col] = -1
-                
-                # Scale numerical features
-                numeric_cols = self.X_train.select_dtypes(include=[np.number]).columns
-                if len(numeric_cols) > 0:
-                    processed_data[numeric_cols] = self.scaler.transform(processed_data[numeric_cols])
-                
-                # Ensure all columns are present
-                for col in self.X_train.columns:
-                    if col not in processed_data.columns:
-                        processed_data[col] = 0
-                
-                processed_data = processed_data[self.X_train.columns]
+                # Ensure correct column order
+                new_data = new_data[self.X_train.columns]
                 
                 # Make predictions
-                predictions = self.model.predict(processed_data)
+                predictions, _ = self.model.predict(new_data)
                 
                 # Add predictions to data
                 result_data = new_data.copy()
@@ -1442,83 +1388,104 @@ class StudentAIAnalysisApp:
                 
                 if save_path:
                     result_data.to_csv(save_path, index=False)
-                    messagebox.showinfo("Success", f"Prediksi disimpan di: {save_path}")
+                    messagebox.showinfo("Sukses", 
+                                      f"Prediksi berhasil disimpan di:\n{save_path}")
                 
             except Exception as e:
-                messagebox.showerror("Prediction Error", str(e))
+                messagebox.showerror("Error", f"Gagal membuat prediksi:\n{str(e)}")
+    
+    def reset_prediction_input(self):
+        """Reset prediction input fields"""
+        if self.X_train is not None:
+            sample_row = self.X_train.iloc[0] if len(self.X_train) > 0 else pd.Series()
+            
+            for col, var in self.input_vars.items():
+                sample_val = sample_row[col] if col in sample_row else 0
+                
+                if isinstance(var, tk.StringVar):
+                    var.set(str(sample_val))
+                elif isinstance(var, tk.DoubleVar):
+                    var.set(float(sample_val) if pd.notna(sample_val) else 0)
+        
+        self.prediction_result.config(state=tk.NORMAL)
+        self.prediction_result.delete(1.0, tk.END)
+        self.prediction_result.insert(tk.END, "Input telah direset. Hasil prediksi akan muncul di sini...")
+        self.prediction_result.config(state=tk.DISABLED)
     
     def export_data(self):
-        """Export data and results to CSV files"""
+        """Export data and results to CSV"""
         if self.data is None:
-            messagebox.showwarning("Warning", "Tidak ada data untuk diekspor")
+            messagebox.showwarning("Peringatan", "Tidak ada data untuk diekspor")
             return
         
         # Create export directory
-        import os
-        export_dir = "export_results"
+        export_dir = "hasil_export"
         os.makedirs(export_dir, exist_ok=True)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # Export original data
-        if self.data is not None:
-            original_path = f"{export_dir}/original_data_{timestamp}.csv"
-            self.data.to_csv(original_path, index=False)
-        
-        # Export preprocessed data (if split)
-        if self.X_train is not None:
-            train_data = self.X_train.copy()
-            train_data['target'] = self.y_train
-            train_data['set'] = 'train'
+        try:
+            # 1. Export original data
+            original_path = f"{export_dir}/data_asli_{timestamp}.csv"
+            self.data.to_csv(original_path, index=False, encoding='utf-8-sig')
             
-            test_data = self.X_test.copy()
-            test_data['target'] = self.y_test
-            test_data['set'] = 'test'
+            # 2. Export preprocessed data (if available)
+            if self.X_train is not None:
+                # Combine train and test data
+                train_data = self.X_train.copy()
+                train_data['target'] = self.y_train
+                train_data['dataset'] = 'train'
+                
+                test_data = self.X_test.copy()
+                test_data['target'] = self.y_test
+                test_data['dataset'] = 'test'
+                
+                preprocessed_data = pd.concat([train_data, test_data], ignore_index=True)
+                preprocessed_path = f"{export_dir}/data_preprocessed_{timestamp}.csv"
+                preprocessed_data.to_csv(preprocessed_path, index=False, encoding='utf-8-sig')
             
-            combined_data = pd.concat([train_data, test_data], ignore_index=True)
-            combined_path = f"{export_dir}/preprocessed_data_{timestamp}.csv"
-            combined_data.to_csv(combined_path, index=False)
-        
-        # Export model predictions (if model exists)
-        if self.model is not None:
-            # Scale test data
-            X_test_scaled = self.X_test.copy()
-            numeric_cols = self.X_test.select_dtypes(include=[np.number]).columns
-            if len(numeric_cols) > 0:
-                X_test_scaled[numeric_cols] = self.scaler.transform(self.X_test[numeric_cols])
+            # 3. Export model results (if available)
+            if self.model.model is not None:
+                # Export predictions
+                if self.X_test is not None:
+                    predictions, _ = self.model.predict(self.X_test)
+                    
+                    predictions_df = self.X_test.copy()
+                    predictions_df['Aktual'] = self.y_test
+                    predictions_df['Prediksi'] = predictions
+                    
+                    predictions_path = f"{export_dir}/hasil_prediksi_{timestamp}.csv"
+                    predictions_df.to_csv(predictions_path, index=False, encoding='utf-8-sig')
+                
+                # Export feature importance
+                feature_importance = self.model.get_feature_importance(self.X_train.columns)
+                if feature_importance is not None:
+                    fi_path = f"{export_dir}/feature_importance_{timestamp}.csv"
+                    feature_importance.to_csv(fi_path, index=False, encoding='utf-8-sig')
+                
+                # Export metrics
+                if hasattr(self.model, 'metrics') and self.model.metrics:
+                    metrics_df = pd.DataFrame([self.model.metrics])
+                    metrics_path = f"{export_dir}/metrics_model_{timestamp}.csv"
+                    metrics_df.to_csv(metrics_path, index=False, encoding='utf-8-sig')
             
-            y_pred = self.model.predict(X_test_scaled)
+            # Show success message
+            messagebox.showinfo("Ekspor Berhasil", 
+                              f"Semua data telah berhasil diekspor ke folder:\n{export_dir}")
             
-            predictions_df = self.X_test.copy()
-            predictions_df['Actual'] = self.y_test
-            predictions_df['Predicted'] = y_pred
-            
-            if self.problem_type == "classification" and hasattr(self.model, 'predict_proba'):
-                proba = self.model.predict_proba(X_test_scaled)
-                for i in range(proba.shape[1]):
-                    predictions_df[f'Prob_Class_{i}'] = proba[:, i]
-            
-            predictions_path = f"{export_dir}/predictions_{timestamp}.csv"
-            predictions_df.to_csv(predictions_path, index=False)
-        
-        # Export metrics (if available)
-        if hasattr(self, 'metrics'):
-            metrics_df = pd.DataFrame([self.metrics])
-            metrics_path = f"{export_dir}/metrics_{timestamp}.csv"
-            metrics_df.to_csv(metrics_path, index=False)
-        
-        # Export feature importance
-        if self.model is not None and hasattr(self.model, 'feature_importances_'):
-            feat_importance = pd.DataFrame({
-                'feature': self.X_train.columns,
-                'importance': self.model.feature_importances_
-            }).sort_values('importance', ascending=False)
-            
-            feat_path = f"{export_dir}/feature_importance_{timestamp}.csv"
-            feat_importance.to_csv(feat_path, index=False)
-        
-        messagebox.showinfo("Export Success", 
-                          f"Semua data berhasil diekspor ke folder: {export_dir}")
+        except Exception as e:
+            messagebox.showerror("Error Ekspor", f"Gagal mengekspor data:\n{str(e)}")
+    
+    def logout(self):
+        """Logout and return to login screen"""
+        self.data = None
+        self.preprocessor = None
+        self.model = RandomForestModel()
+        self.X_train = None
+        self.X_test = None
+        self.y_train = None
+        self.y_test = None
+        self.setup_login_screen()
     
     def clear_content(self):
         """Clear content frame"""
@@ -1526,8 +1493,19 @@ class StudentAIAnalysisApp:
             widget.destroy()
 
 def main():
+    """Main function to run the application"""
     root = tk.Tk()
     app = StudentAIAnalysisApp(root)
+    
+    # Center the window
+    window_width = 1400
+    window_height = 800
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    center_x = int(screen_width/2 - window_width/2)
+    center_y = int(screen_height/2 - window_height/2)
+    root.geometry(f'{window_width}x{window_height}+{center_x}+{center_y}')
+    
     root.mainloop()
 
 if __name__ == "__main__":
