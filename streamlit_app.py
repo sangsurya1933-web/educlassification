@@ -13,7 +13,7 @@ from io import BytesIO
 import warnings
 warnings.filterwarnings('ignore')
 
-# Fungsi untuk membaca data dari teks PDF yang diberikan
+# Fungsi untuk membaca data dari teks CSV yang diberikan
 def load_data():
     data = []
     # Parsing data dari teks yang diberikan
