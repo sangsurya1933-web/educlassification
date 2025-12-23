@@ -2,46 +2,56 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 
-import tabula
-import os
+# ======================
+# KONFIGURASI
+# ======================
+st.set_page_config(
+    page_title="Analisis Penggunaan AI",
+    layout="wide"
+)
 
-st.set_page_config(page_title="Analisis Penggunaan AI", layout="wide")
 st.title("📊 Analisis Tingkat Penggunaan AI terhadap Performa Akademik Siswa")
+st.caption("Algoritma Random Forest")
 
 # ======================
-# LOGIN
+# SIDEBAR
 # ======================
 role = st.sidebar.selectbox("Login sebagai", ["Guru", "Siswa"])
+
+uploaded_file = st.sidebar.file_uploader(
+    "Upload Dataset (CSV)",
+    type=["csv"]
+)
 
 # ======================
 # LOAD CSV
 # ======================
-uploaded_file = st.sidebar.file_uploader("Upload Students tabel.csv", type=["csv"])
-
 if uploaded_file:
-    df = tabula.read_csv(uploaded_file, pages='all')[0]
-    st.sidebar.success("Dataset berhasil dibaca dari CSV")
+    df = pd.read_csv(uploaded_file, sep=";")
+    st.sidebar.success("Dataset CSV berhasil diunggah")
 
 # ======================
-# PREPROCESSING FUNCTION
+# PREPROCESSING
 # ======================
 def preprocessing(df):
     df = df.drop_duplicates()
 
-    for col in df.select_dtypes(include='object').columns:
+    # Missing values
+    for col in df.select_dtypes(include="object").columns:
         df[col] = df[col].fillna(df[col].mode()[0])
 
-    for col in df.select_dtypes(include='number').columns:
+    for col in df.select_dtypes(include="number").columns:
         df[col] = df[col].fillna(df[col].mean())
 
-    # Outlier IQR
-    for col in df.select_dtypes(include='number').columns:
+    # Outlier (IQR)
+    for col in df.select_dtypes(include="number").columns:
         Q1 = df[col].quantile(0.25)
         Q3 = df[col].quantile(0.75)
         IQR = Q3 - Q1
@@ -49,12 +59,12 @@ def preprocessing(df):
 
     # Encoding
     le = LabelEncoder()
-    for col in df.select_dtypes(include='object').columns:
+    for col in df.select_dtypes(include="object").columns:
         df[col] = le.fit_transform(df[col])
 
-    # Standardisasi
+    # Standarisasi
     scaler = StandardScaler()
-    num_cols = df.select_dtypes(include='number').columns
+    num_cols = df.select_dtypes(include="number").columns
     df[num_cols] = scaler.fit_transform(df[num_cols])
 
     return df
@@ -69,20 +79,23 @@ if role == "Guru" and uploaded_file:
     )
 
     if menu == "Dataset":
-        st.subheader("📂 Dataset dari PDF")
+        st.subheader("📂 Dataset Siswa")
         st.dataframe(df)
 
     elif menu == "Preprocessing":
         st.subheader("⚙️ Preprocessing Data")
         df_clean = preprocessing(df)
-        st.dataframe(df_clean)
+        st.dataframe(df_clean.head())
+
+        os.makedirs("output", exist_ok=True)
         df_clean.to_csv("output/data_clean.csv", index=False)
-        st.success("Data preprocessing disimpan sebagai data_clean.csv")
+        st.success("Data preprocessing disimpan (data_clean.csv)")
 
     elif menu == "Pemodelan":
         st.subheader("🌲 Pemodelan Random Forest")
 
         df_clean = preprocessing(df)
+
         X = df_clean.drop(columns=["Impact_on_Grades"])
         y = df_clean["Impact_on_Grades"]
 
@@ -92,17 +105,17 @@ if role == "Guru" and uploaded_file:
 
         model = RandomForestClassifier(n_estimators=100, random_state=42)
         model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
 
-        pd.DataFrame(X_train).to_csv("output/data_train.csv", index=False)
-        pd.DataFrame(X_test).to_csv("output/data_test.csv", index=False)
+        X_train.to_csv("output/data_train.csv", index=False)
+        X_test.to_csv("output/data_test.csv", index=False)
 
-        st.success("Model berhasil dilatih")
+        st.success("Model Random Forest berhasil dilatih")
 
     elif menu == "Evaluasi":
         st.subheader("📈 Evaluasi Model")
 
         df_clean = preprocessing(df)
+
         X = df_clean.drop(columns=["Impact_on_Grades"])
         y = df_clean["Impact_on_Grades"]
 
@@ -119,15 +132,18 @@ if role == "Guru" and uploaded_file:
         rec = recall_score(y_test, y_pred, average="weighted")
         f1 = f1_score(y_test, y_pred, average="weighted")
 
-        st.metric("Akurasi", f"{acc:.2%}")
-        st.metric("Presisi", f"{prec:.2%}")
-        st.metric("Recall", f"{rec:.2%}")
-        st.metric("F1-Score", f"{f1:.2%}")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Akurasi", f"{acc:.2%}")
+        col2.metric("Presisi", f"{prec:.2%}")
+        col3.metric("Recall", f"{rec:.2%}")
+        col4.metric("F1-Score", f"{f1:.2%}")
 
         cm = confusion_matrix(y_test, y_pred)
         fig, ax = plt.subplots()
         ax.imshow(cm)
         ax.set_title("Confusion Matrix")
+        ax.set_xlabel("Prediksi")
+        ax.set_ylabel("Aktual")
         st.pyplot(fig)
 
         hasil = pd.DataFrame({
@@ -140,9 +156,10 @@ if role == "Guru" and uploaded_file:
 # MENU SISWA
 # ======================
 elif role == "Siswa" and uploaded_file:
-    st.subheader("🔍 Analisis Prediksi Performa Akademik")
+    st.subheader("🔍 Analisis Performa Akademik")
 
     df_clean = preprocessing(df)
+
     X = df_clean.drop(columns=["Impact_on_Grades"])
     y = df_clean["Impact_on_Grades"]
 
@@ -150,5 +167,4 @@ elif role == "Siswa" and uploaded_file:
     model.fit(X, y)
 
     pred = model.predict(X)
-    st.write("Hasil Analisis:")
     st.dataframe(pd.DataFrame({"Prediksi": pred}))
