@@ -17,12 +17,12 @@ try:
     ML_AVAILABLE = True
 except ImportError as e:
     st.warning(f"⚠️ Library scikit-learn tidak tersedia. Error: {str(e)}")
-    st.info("Instal dengan: pip install scikit-learn")
+    st.info("Install dengan: pip install scikit-learn")
     ML_AVAILABLE = False
 
 # Set page configuration
 st.set_page_config(
-    page_title="AI Usage Analysis System",
+    page_title="Sistem Analisis Penggunaan AI",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -30,10 +30,10 @@ st.set_page_config(
 
 # Initialize session state
 def init_session_state():
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
-    if 'user_type' not in st.session_state:
-        st.session_state.user_type = None
+    if 'terautentikasi' not in st.session_state:
+        st.session_state.terautentikasi = False
+    if 'tipe_pengguna' not in st.session_state:
+        st.session_state.tipe_pengguna = None
     if 'df_raw' not in st.session_state:
         st.session_state.df_raw = None
     if 'df_clean' not in st.session_state:
@@ -54,33 +54,33 @@ def generate_sample_data(n_samples=100):
     
     # Sample data
     colleges = [
-        'Indian Institute of Technology', 'University of Delhi', 
-        'Jawaharlal Nehru University', 'University of Calcutta',
-        'University of Mumbai', 'Anna University', 'University of Hyderabad',
-        'Banaras Hindu University', 'University of Madras', 'University of Pune'
+        'Institut Teknologi India', 'Universitas Delhi', 
+        'Universitas Jawaharlal Nehru', 'Universitas Kalkuta',
+        'Universitas Mumbai', 'Universitas Anna', 'Universitas Hyderabad',
+        'Universitas Hindu Banaras', 'Universitas Madras', 'Universitas Pune'
     ]
     
-    streams = ['Engineering', 'Science', 'Commerce', 'Arts', 'Medical', 'Law', 'Management', 'Pharmacy', 'Hotel Management', 'Agriculture']
+    streams = ['Teknik', 'Sains', 'Bisnis', 'Seni', 'Kedokteran', 'Hukum', 'Manajemen', 'Farmasi', 'Manajemen Perhotelan', 'Pertanian']
     
     ai_tools = [
         'ChatGPT', 'Gemini', 'Copilot', 'ChatGPT, Gemini', 
         'Gemini, Copilot', 'ChatGPT, Copilot', 'ChatGPT, Gemini, Copilot',
-        'Gemini, Midjourney', 'ChatGPT, Midjourney', 'All Tools'
+        'Gemini, Midjourney', 'ChatGPT, Midjourney', 'Semua Tools'
     ]
     
     use_cases = [
-        'Assignments', 'Content Writing', 'MCQ Practice', 'Exam Prep', 
-        'Doubt Solving', 'Learning new topics', 'Project Work',
-        'Research', 'Coding Help', 'Presentation'
+        'Tugas', 'Penulisan Konten', 'Latihan MCQ', 'Persiapan Ujian', 
+        'Pemecahan Masalah', 'Mempelajari topik baru', 'Proyek',
+        'Penelitian', 'Bantuan Coding', 'Presentasi'
     ]
     
     data = {
-        'Student_Name': [f'Student_{i:03d}' for i in range(1, n_samples + 1)],
-        'College_Name': np.random.choice(colleges, n_samples),
-        'Stream': np.random.choice(streams, n_samples),
-        'AL_Tools_Used': np.random.choice(ai_tools, n_samples),
-        'Usage_Intensity_Score': np.random.randint(5, 46, n_samples),
-        'Use_Cases': [', '.join(np.random.choice(use_cases, np.random.randint(1, 4))) for _ in range(n_samples)]
+        'Nama_Siswa': [f'Siswa_{i:03d}' for i in range(1, n_samples + 1)],
+        'Nama_Kampus': np.random.choice(colleges, n_samples),
+        'Jurusan': np.random.choice(streams, n_samples),
+        'Tools_AI_Digunakan': np.random.choice(ai_tools, n_samples),
+        'Skor_Intensitas_Penggunaan': np.random.randint(5, 46, n_samples),
+        'Kasus_Penggunaan': [', '.join(np.random.choice(use_cases, np.random.randint(1, 4))) for _ in range(n_samples)]
     }
     
     df = pd.DataFrame(data)
@@ -99,7 +99,7 @@ def load_data(uploaded_file=None):
             elif file_extension in ['xlsx', 'xls']:
                 df = pd.read_excel(uploaded_file)
             else:
-                st.error("❌ Please upload a CSV or Excel file")
+                st.error("❌ Silakan upload file CSV atau Excel")
                 return None
         else:
             # Use sample data
@@ -107,29 +107,29 @@ def load_data(uploaded_file=None):
         
         # Basic validation
         if df.empty:
-            st.error("❌ The uploaded file is empty")
+            st.error("❌ File yang diupload kosong")
             return None
         
         # Ensure required columns exist
-        required_columns = ['Student_Name', 'College_Name', 'Stream', 
-                           'AL_Tools_Used', 'Usage_Intensity_Score', 'Use_Cases']
+        required_columns = ['Nama_Siswa', 'Nama_Kampus', 'Jurusan', 
+                           'Tools_AI_Digunakan', 'Skor_Intensitas_Penggunaan', 'Kasus_Penggunaan']
         
         # Check for missing columns
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
-            st.warning(f"⚠️ Missing columns: {missing_columns}")
-            st.info("Using sample data instead")
+            st.warning(f"⚠️ Kolom yang hilang: {missing_columns}")
+            st.info("Menggunakan data sampel sebagai gantinya")
             df = generate_sample_data()
         
         # Show basic info
-        st.success(f"✅ Data loaded successfully! Shape: {df.shape}")
-        st.info(f"📊 Columns: {', '.join(df.columns.tolist())}")
+        st.success(f"✅ Data berhasil dimuat! Ukuran: {df.shape}")
+        st.info(f"📊 Kolom: {', '.join(df.columns.tolist())}")
         
         return df
         
     except Exception as e:
-        st.error(f"❌ Error loading data: {str(e)}")
-        st.info("Using sample data instead")
+        st.error(f"❌ Error memuat data: {str(e)}")
+        st.info("Menggunakan data sampel sebagai gantinya")
         return generate_sample_data()
 
 # Function for data preprocessing
@@ -137,7 +137,7 @@ def preprocess_data(df):
     """Preprocess the data for machine learning"""
     try:
         if df is None:
-            st.error("❌ No data to preprocess")
+            st.error("❌ Tidak ada data untuk diproses")
             return None, None
         
         df_clean = df.copy()
@@ -145,70 +145,70 @@ def preprocess_data(df):
         # 1. Check for missing values
         missing_values = df_clean.isnull().sum()
         if missing_values.sum() > 0:
-            st.warning(f"⚠️ Missing values found: {missing_values[missing_values > 0].to_dict()}")
+            st.warning(f"⚠️ Nilai yang hilang ditemukan: {missing_values[missing_values > 0].to_dict()}")
             
             # Fill missing values
             for col in df_clean.columns:
                 if df_clean[col].dtype == 'object':
-                    df_clean[col] = df_clean[col].fillna('Unknown')
+                    df_clean[col] = df_clean[col].fillna('Tidak Diketahui')
                 else:
                     df_clean[col] = df_clean[col].fillna(df_clean[col].median())
         
-        # 2. Convert Usage_Intensity_Score to numeric
-        df_clean['Usage_Intensity_Score'] = pd.to_numeric(
-            df_clean['Usage_Intensity_Score'], errors='coerce'
+        # 2. Convert Skor_Intensitas_Penggunaan to numeric
+        df_clean['Skor_Intensitas_Penggunaan'] = pd.to_numeric(
+            df_clean['Skor_Intensitas_Penggunaan'], errors='coerce'
         )
         
         # Fill any NaN values after conversion
-        df_clean['Usage_Intensity_Score'] = df_clean['Usage_Intensity_Score'].fillna(
-            df_clean['Usage_Intensity_Score'].median()
+        df_clean['Skor_Intensitas_Penggunaan'] = df_clean['Skor_Intensitas_Penggunaan'].fillna(
+            df_clean['Skor_Intensitas_Penggunaan'].median()
         )
         
-        # 3. Create target variable (Usage Level)
-        df_clean['Usage_Level'] = pd.cut(
-            df_clean['Usage_Intensity_Score'],
+        # 3. Create target variable (Tingkat Penggunaan)
+        df_clean['Tingkat_Penggunaan'] = pd.cut(
+            df_clean['Skor_Intensitas_Penggunaan'],
             bins=[0, 15, 30, 50],
-            labels=['Low', 'Medium', 'High']
+            labels=['Rendah', 'Sedang', 'Tinggi']
         )
         
-        # Remove rows with NaN in Usage_Level
+        # Remove rows with NaN in Tingkat_Penggunaan
         initial_rows = len(df_clean)
-        df_clean = df_clean.dropna(subset=['Usage_Level'])
+        df_clean = df_clean.dropna(subset=['Tingkat_Penggunaan'])
         removed_rows = initial_rows - len(df_clean)
         
         if removed_rows > 0:
-            st.warning(f"⚠️ Removed {removed_rows} rows with invalid Usage_Intensity_Score")
+            st.warning(f"⚠️ Dihapus {removed_rows} baris dengan Skor_Intensitas_Penggunaan tidak valid")
         
         # 4. Simple encoding for demonstration
         label_encoders = {}
         
-        # Encode Stream
-        if 'Stream' in df_clean.columns:
-            unique_streams = df_clean['Stream'].unique()
+        # Encode Jurusan
+        if 'Jurusan' in df_clean.columns:
+            unique_streams = df_clean['Jurusan'].unique()
             stream_mapping = {stream: i for i, stream in enumerate(unique_streams)}
-            df_clean['Stream_Encoded'] = df_clean['Stream'].map(stream_mapping)
-            label_encoders['Stream'] = stream_mapping
+            df_clean['Jurusan_Encoded'] = df_clean['Jurusan'].map(stream_mapping)
+            label_encoders['Jurusan'] = stream_mapping
         
         # Simple tool count encoding
-        df_clean['Tools_Count'] = df_clean['AL_Tools_Used'].apply(
+        df_clean['Jumlah_Tools'] = df_clean['Tools_AI_Digunakan'].apply(
             lambda x: len(str(x).split(',')) if pd.notnull(x) else 0
         )
         
         # Simple use cases count encoding
-        df_clean['UseCases_Count'] = df_clean['Use_Cases'].apply(
+        df_clean['Jumlah_Kasus_Penggunaan'] = df_clean['Kasus_Penggunaan'].apply(
             lambda x: len(str(x).split(',')) if pd.notnull(x) else 0
         )
         
         # Encode target variable
-        usage_level_mapping = {'Low': 0, 'Medium': 1, 'High': 2}
-        df_clean['Usage_Level_Encoded'] = df_clean['Usage_Level'].map(usage_level_mapping)
-        label_encoders['Usage_Level'] = usage_level_mapping
+        usage_level_mapping = {'Rendah': 0, 'Sedang': 1, 'Tinggi': 2}
+        df_clean['Tingkat_Penggunaan_Encoded'] = df_clean['Tingkat_Penggunaan'].map(usage_level_mapping)
+        label_encoders['Tingkat_Penggunaan'] = usage_level_mapping
         
-        st.success(f"✅ Data preprocessing completed! Final shape: {df_clean.shape}")
+        st.success(f"✅ Pra-pemrosesan data selesai! Ukuran akhir: {df_clean.shape}")
         return df_clean, label_encoders
         
     except Exception as e:
-        st.error(f"❌ Error in preprocessing: {str(e)}")
+        st.error(f"❌ Error dalam pra-pemrosesan: {str(e)}")
         return None, None
 
 # Function to split data
@@ -216,17 +216,17 @@ def split_data(df_clean, test_size=0.3, random_state=42):
     """Split data into training and testing sets"""
     try:
         # Prepare features and target
-        feature_cols = ['Stream_Encoded', 'Tools_Count', 'UseCases_Count', 'Usage_Intensity_Score']
+        feature_cols = ['Jurusan_Encoded', 'Jumlah_Tools', 'Jumlah_Kasus_Penggunaan', 'Skor_Intensitas_Penggunaan']
         
         # Check if all feature columns exist
         available_features = [col for col in feature_cols if col in df_clean.columns]
         
         if len(available_features) < 2:
-            st.error("❌ Not enough features available for training")
+            st.error("❌ Tidak cukup fitur yang tersedia untuk pelatihan")
             return None, None, None, None, None, None
         
         X = df_clean[available_features]
-        y = df_clean['Usage_Level_Encoded']
+        y = df_clean['Tingkat_Penggunaan_Encoded']
         
         # Split data
         X_train, X_test, y_train, y_test = train_test_split(
@@ -238,11 +238,11 @@ def split_data(df_clean, test_size=0.3, random_state=42):
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
         
-        st.success(f"✅ Data split completed: Train={len(X_train)}, Test={len(X_test)}")
+        st.success(f"✅ Pembagian data selesai: Latih={len(X_train)}, Uji={len(X_test)}")
         return X_train_scaled, X_test_scaled, y_train, y_test, scaler, available_features
         
     except Exception as e:
-        st.error(f"❌ Error in data splitting: {str(e)}")
+        st.error(f"❌ Error dalam pembagian data: {str(e)}")
         return None, None, None, None, None, None
 
 # Function to train model
@@ -262,11 +262,11 @@ def train_model(X_train, y_train, **kwargs):
         model = RandomForestClassifier(**params)
         model.fit(X_train, y_train)
         
-        st.success("✅ Model training completed!")
+        st.success("✅ Pelatihan model selesai!")
         return model
         
     except Exception as e:
-        st.error(f"❌ Error in model training: {str(e)}")
+        st.error(f"❌ Error dalam pelatihan model: {str(e)}")
         return None
 
 # Function to evaluate model
@@ -285,8 +285,8 @@ def evaluate_model(model, X_test, y_test):
         f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
         
         metrics = {
-            'accuracy': accuracy,
-            'precision': precision,
+            'akurasi': accuracy,
+            'presisi': precision,
             'recall': recall,
             'f1_score': f1
         }
@@ -301,7 +301,7 @@ def evaluate_model(model, X_test, y_test):
         return y_pred, report_df, cm, metrics
         
     except Exception as e:
-        st.error(f"❌ Error in model evaluation: {str(e)}")
+        st.error(f"❌ Error dalam evaluasi model: {str(e)}")
         return None, None, None, None
 
 # Function to create download link
@@ -323,9 +323,9 @@ def main():
     # Check if ML libraries are available
     if not ML_AVAILABLE:
         st.error("""
-        ❌ **Required libraries missing!**
+        ❌ **Library yang diperlukan tidak tersedia!**
         
-        Please install the required libraries:
+        Silakan install library yang diperlukan:
         ```
         pip install scikit-learn pandas numpy matplotlib seaborn
         ```
@@ -334,153 +334,153 @@ def main():
     
     # Login sidebar
     with st.sidebar:
-        st.title("🔐 Login System")
+        st.title("🔐 Sistem Login")
         
-        if not st.session_state.authenticated:
+        if not st.session_state.terautentikasi:
             st.markdown("---")
-            user_type = st.selectbox("Select User Type", ["Teacher", "Student"])
+            tipe_pengguna = st.selectbox("Pilih Tipe Pengguna", ["Guru", "Siswa"])
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
             
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("Login", use_container_width=True):
-                    if user_type == "Teacher" and username == "teacher" and password == "teacher123":
-                        st.session_state.authenticated = True
-                        st.session_state.user_type = "teacher"
-                        st.success("✅ Teacher login successful!")
+                    if tipe_pengguna == "Guru" and username == "guru" and password == "guru123":
+                        st.session_state.terautentikasi = True
+                        st.session_state.tipe_pengguna = "guru"
+                        st.success("✅ Login guru berhasil!")
                         st.rerun()
-                    elif user_type == "Student" and username == "student" and password == "student123":
-                        st.session_state.authenticated = True
-                        st.session_state.user_type = "student"
-                        st.success("✅ Student login successful!")
+                    elif tipe_pengguna == "Siswa" and username == "siswa" and password == "siswa123":
+                        st.session_state.terautentikasi = True
+                        st.session_state.tipe_pengguna = "siswa"
+                        st.success("✅ Login siswa berhasil!")
                         st.rerun()
                     else:
-                        st.error("❌ Invalid credentials!")
+                        st.error("❌ Kredensial tidak valid!")
             
             with col2:
-                if st.button("Quick Demo", use_container_width=True):
-                    st.session_state.authenticated = True
-                    st.session_state.user_type = "teacher"
+                if st.button("Demo Cepat", use_container_width=True):
+                    st.session_state.terautentikasi = True
+                    st.session_state.tipe_pengguna = "guru"
                     st.session_state.df_raw = generate_sample_data()
-                    st.success("✅ Demo mode activated!")
+                    st.success("✅ Mode demo diaktifkan!")
                     st.rerun()
             
             st.markdown("---")
-            st.info("**Demo Credentials:**")
-            st.write("- 👨‍🏫 Teacher: teacher / teacher123")
-            st.write("- 👨‍🎓 Student: student / student123")
+            st.info("**Kredensial Demo:**")
+            st.write("- 👨‍🏫 Guru: guru / guru123")
+            st.write("- 👨‍🎓 Siswa: siswa / siswa123")
             
         else:
-            st.success(f"✅ Logged in as {st.session_state.user_type}")
+            st.success(f"✅ Login sebagai {st.session_state.tipe_pengguna}")
             st.markdown("---")
             
-            if st.button("🔄 Reset All Data", use_container_width=True):
+            if st.button("🔄 Reset Semua Data", use_container_width=True):
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
                 st.rerun()
             
-            if st.button("🚪 Logout", use_container_width=True):
-                st.session_state.authenticated = False
-                st.session_state.user_type = None
+            if st.button("🚪 Keluar", use_container_width=True):
+                st.session_state.terautentikasi = False
+                st.session_state.tipe_pengguna = None
                 st.rerun()
     
     # Main content based on authentication
-    if not st.session_state.authenticated:
+    if not st.session_state.terautentikasi:
         show_welcome_page()
         return
     
     # Teacher Dashboard
-    if st.session_state.user_type == "teacher":
+    if st.session_state.tipe_pengguna == "guru":
         show_teacher_dashboard()
     else:
         show_student_dashboard()
 
 def show_welcome_page():
     """Show welcome page for unauthenticated users"""
-    st.title("🎓 AI Usage Analysis System")
+    st.title("🎓 Sistem Analisis Penggunaan AI")
     
     col1, col2 = st.columns([2, 1])
     
     with col1:
         st.markdown("""
-        ### Welcome to the AI Usage Analysis Dashboard
+        ### Selamat Datang di Dashboard Analisis Penggunaan AI
         
-        This system analyzes the relationship between AI tool usage and academic performance
-        using Random Forest algorithm.
+        Sistem ini menganalisis hubungan antara penggunaan tools AI dengan performa akademik
+        menggunakan algoritma Random Forest.
         
-        **Features:**
-        👨‍🏫 **Teacher Dashboard:**
-        - 📁 Upload and manage student data
-        - 🔧 Data preprocessing and cleaning
-        - 🤖 Train Random Forest models
-        - 📊 Evaluate model performance
-        - 📈 Visualize results
-        - 📥 Export analysis results
+        **Fitur:**
+        👨‍🏫 **Dashboard Guru:**
+        - 📁 Upload dan kelola data siswa
+        - 🔧 Pra-pemrosesan dan pembersihan data
+        - 🤖 Latih model Random Forest
+        - 📊 Evaluasi performa model
+        - 📈 Visualisasi hasil
+        - 📥 Ekspor hasil analisis
         
-        👨‍🎓 **Student Dashboard:**
-        - 📊 View analysis results
-        - 🎯 Predict personal AI usage level
-        - 📈 Compare with peers
+        👨‍🎓 **Dashboard Siswa:**
+        - 📊 Lihat hasil analisis
+        - 🎯 Prediksi tingkat penggunaan AI pribadi
+        - 📈 Bandingkan dengan teman sebaya
         
-        **Data Requirements:**
-        Upload a CSV file with these columns:
-        - Student_Name
-        - College_Name
-        - Stream
-        - AL_Tools_Used
-        - Usage_Intensity_Score (1-50)
-        - Use_Cases
+        **Persyaratan Data:**
+        Upload file CSV dengan kolom berikut:
+        - Nama_Siswa
+        - Nama_Kampus
+        - Jurusan
+        - Tools_AI_Digunakan
+        - Skor_Intensitas_Penggunaan (1-50)
+        - Kasus_Penggunaan
         """)
     
     with col2:
         # Show sample data
-        st.subheader("📋 Sample Data")
+        st.subheader("📋 Data Sampel")
         sample_df = generate_sample_data(5)
         st.dataframe(sample_df, use_container_width=True)
         
         # Download sample CSV
         csv = sample_df.to_csv(index=False)
         st.download_button(
-            label="📥 Download Sample CSV",
+            label="📥 Download CSV Sampel",
             data=csv,
-            file_name="sample_ai_usage_data.csv",
+            file_name="sampel_data_penggunaan_ai.csv",
             mime="text/csv",
             use_container_width=True
         )
     
     st.markdown("---")
-    st.info("👈 **Please login from the sidebar to continue**")
+    st.info("👈 **Silakan login dari sidebar untuk melanjutkan**")
 
 def show_teacher_dashboard():
     """Show teacher dashboard"""
-    st.title("👨‍🏫 Teacher Dashboard")
-    st.markdown("**Analysis of AI Usage on Academic Performance using Random Forest**")
+    st.title("👨‍🏫 Dashboard Guru")
+    st.markdown("**Analisis Penggunaan AI terhadap Performa Akademik menggunakan Random Forest**")
     
     # Teacher menu
     menu = st.sidebar.radio(
         "📋 Menu",
-        ["📁 Data Management", "🔧 Data Preprocessing", "🤖 Model Training", 
-         "📊 Model Evaluation", "📈 Visualizations", "📥 Export Data"],
+        ["📁 Manajemen Data", "🔧 Pra-Pemrosesan Data", "🤖 Pelatihan Model", 
+         "📊 Evaluasi Model", "📈 Visualisasi", "📥 Ekspor Data"],
         index=0
     )
     
-    if menu == "📁 Data Management":
+    if menu == "📁 Manajemen Data":
         show_data_management()
-    elif menu == "🔧 Data Preprocessing":
+    elif menu == "🔧 Pra-Pemrosesan Data":
         show_data_preprocessing()
-    elif menu == "🤖 Model Training":
+    elif menu == "🤖 Pelatihan Model":
         show_model_training()
-    elif menu == "📊 Model Evaluation":
+    elif menu == "📊 Evaluasi Model":
         show_model_evaluation()
-    elif menu == "📈 Visualizations":
+    elif menu == "📈 Visualisasi":
         show_visualizations()
-    elif menu == "📥 Export Data":
+    elif menu == "📥 Ekspor Data":
         show_export_data()
 
 def show_data_management():
     """Show data management section"""
-    st.header("📁 Data Management")
+    st.header("📁 Manajemen Data")
     
     col1, col2 = st.columns([1, 1])
     
@@ -488,55 +488,55 @@ def show_data_management():
         st.subheader("Upload Data")
         
         uploaded_file = st.file_uploader(
-            "Choose a CSV or Excel file",
+            "Pilih file CSV atau Excel",
             type=['csv', 'xlsx', 'xls'],
-            help="Upload student data file"
+            help="Upload file data siswa"
         )
         
         if uploaded_file is not None:
-            if st.button("📂 Load Data", use_container_width=True):
-                with st.spinner("Loading data..."):
+            if st.button("📂 Muat Data", use_container_width=True):
+                with st.spinner("Memuat data..."):
                     df = load_data(uploaded_file)
                     if df is not None:
                         st.session_state.df_raw = df
-                        st.success(f"✅ Data loaded: {len(df)} records")
+                        st.success(f"✅ Data dimuat: {len(df)} catatan")
         
-        st.subheader("Or Use Sample Data")
-        if st.button("🎲 Generate Sample Data", use_container_width=True):
-            with st.spinner("Generating sample data..."):
+        st.subheader("Atau Gunakan Data Sampel")
+        if st.button("🎲 Generate Data Sampel", use_container_width=True):
+            with st.spinner("Membuat data sampel..."):
                 st.session_state.df_raw = generate_sample_data()
-                st.success(f"✅ Sample data generated: {len(st.session_state.df_raw)} records")
+                st.success(f"✅ Data sampel dibuat: {len(st.session_state.df_raw)} catatan")
     
     with col2:
         if st.session_state.df_raw is not None:
-            st.subheader("Data Preview")
+            st.subheader("Pratinjau Data")
             
             # Show data info
-            st.info(f"**Data Shape:** {st.session_state.df_raw.shape[0]} rows × {st.session_state.df_raw.shape[1]} columns")
+            st.info(f"**Ukuran Data:** {st.session_state.df_raw.shape[0]} baris × {st.session_state.df_raw.shape[1]} kolom")
             
             # Show data
             st.dataframe(st.session_state.df_raw.head(10), use_container_width=True)
             
             # Data statistics
-            with st.expander("📊 Data Statistics", expanded=True):
+            with st.expander("📊 Statistik Data", expanded=True):
                 col_stats1, col_stats2 = st.columns(2)
                 
                 with col_stats1:
-                    st.write("**Basic Info:**")
-                    st.write(f"Rows: {st.session_state.df_raw.shape[0]}")
-                    st.write(f"Columns: {st.session_state.df_raw.shape[1]}")
-                    st.write(f"Missing Values: {st.session_state.df_raw.isnull().sum().sum()}")
+                    st.write("**Informasi Dasar:**")
+                    st.write(f"Baris: {st.session_state.df_raw.shape[0]}")
+                    st.write(f"Kolom: {st.session_state.df_raw.shape[1]}")
+                    st.write(f"Nilai Hilang: {st.session_state.df_raw.isnull().sum().sum()}")
                 
                 with col_stats2:
-                    st.write("**Column Types:**")
+                    st.write("**Tipe Kolom:**")
                     dtype_info = st.session_state.df_raw.dtypes.astype(str).to_dict()
                     for col, dtype in dtype_info.items():
                         st.write(f"• {col}: {dtype}")
             
             # Column distribution
-            with st.expander("📈 Column Distribution"):
+            with st.expander("📈 Distribusi Kolom"):
                 selected_col = st.selectbox(
-                    "Select column",
+                    "Pilih kolom",
                     st.session_state.df_raw.columns.tolist()
                 )
                 
@@ -551,54 +551,54 @@ def show_data_management():
                         # Numerical
                         st.session_state.df_raw[selected_col].hist(ax=ax, bins=20, color='skyblue')
                     
-                    ax.set_title(f'Distribution of {selected_col}')
+                    ax.set_title(f'Distribusi {selected_col}')
                     ax.set_xlabel(selected_col)
-                    ax.set_ylabel('Frequency')
+                    ax.set_ylabel('Frekuensi')
                     st.pyplot(fig)
         else:
-            st.info("👈 Please upload data or generate sample data to begin")
+            st.info("👈 Silakan upload data atau buat data sampel untuk memulai")
 
 def show_data_preprocessing():
     """Show data preprocessing section"""
-    st.header("🔧 Data Preprocessing")
+    st.header("🔧 Pra-Pemrosesan Data")
     
     if st.session_state.df_raw is None:
-        st.warning("⚠️ Please load data first in 'Data Management' section")
+        st.warning("⚠️ Silakan muat data terlebih dahulu di bagian 'Manajemen Data'")
         return
     
-    st.subheader("Raw Data Preview")
+    st.subheader("Pratinjau Data Mentah")
     st.dataframe(st.session_state.df_raw.head(), use_container_width=True)
     
-    if st.button("🔄 Start Preprocessing", use_container_width=True):
-        with st.spinner("Preprocessing data..."):
+    if st.button("🔄 Mulai Pra-Pemrosesan", use_container_width=True):
+        with st.spinner("Memproses data..."):
             df_clean, label_encoders = preprocess_data(st.session_state.df_raw)
             
             if df_clean is not None and label_encoders is not None:
                 st.session_state.df_clean = df_clean
                 st.session_state.label_encoders = label_encoders
                 
-                st.success("✅ Preprocessing completed!")
+                st.success("✅ Pra-pemrosesan selesai!")
                 
                 # Show results
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    st.subheader("Cleaned Data Preview")
-                    st.dataframe(df_clean[['Student_Name', 'College_Name', 'Stream', 
-                                         'Usage_Intensity_Score', 'Usage_Level']].head(), 
+                    st.subheader("Pratinjau Data Bersih")
+                    st.dataframe(df_clean[['Nama_Siswa', 'Nama_Kampus', 'Jurusan', 
+                                         'Skor_Intensitas_Penggunaan', 'Tingkat_Penggunaan']].head(), 
                                use_container_width=True)
                 
                 with col2:
-                    st.subheader("Target Distribution")
+                    st.subheader("Distribusi Target")
                     fig, ax = plt.subplots(figsize=(8, 4))
                     
-                    level_counts = df_clean['Usage_Level'].value_counts()
+                    level_counts = df_clean['Tingkat_Penggunaan'].value_counts()
                     colors = ['#FF6B6B', '#4ECDC4', '#45B7D1']
                     level_counts.plot(kind='bar', ax=ax, color=colors)
                     
-                    ax.set_xlabel('Usage Level')
-                    ax.set_ylabel('Count')
-                    ax.set_title('Distribution of AI Usage Levels')
+                    ax.set_xlabel('Tingkat Penggunaan')
+                    ax.set_ylabel('Jumlah')
+                    ax.set_title('Distribusi Tingkat Penggunaan AI')
                     
                     # Add count labels
                     for i, v in enumerate(level_counts):
@@ -607,45 +607,45 @@ def show_data_preprocessing():
                     st.pyplot(fig)
                 
                 # Show preprocessing details
-                with st.expander("🔍 Preprocessing Details"):
-                    st.write("**Created Features:**")
-                    st.write("• Stream_Encoded: Encoded stream categories")
-                    st.write("• Tools_Count: Number of AI tools used")
-                    st.write("• UseCases_Count: Number of use cases")
-                    st.write("• Usage_Level: Categorized usage level (Low/Medium/High)")
-                    st.write("• Usage_Level_Encoded: Numeric encoding of usage level")
+                with st.expander("🔍 Detail Pra-Pemrosesan"):
+                    st.write("**Fitur yang Dibuat:**")
+                    st.write("• Jurusan_Encoded: Kode untuk kategori jurusan")
+                    st.write("• Jumlah_Tools: Jumlah tools AI yang digunakan")
+                    st.write("• Jumlah_Kasus_Penggunaan: Jumlah kasus penggunaan")
+                    st.write("• Tingkat_Penggunaan: Kategori tingkat penggunaan (Rendah/Sedang/Tinggi)")
+                    st.write("• Tingkat_Penggunaan_Encoded: Kode numerik untuk tingkat penggunaan")
                     
-                    st.write("\n**Data Shape After Preprocessing:**")
-                    st.write(f"• Rows: {df_clean.shape[0]}")
-                    st.write(f"• Columns: {df_clean.shape[1]}")
+                    st.write("\n**Ukuran Data Setelah Pra-Pemrosesan:**")
+                    st.write(f"• Baris: {df_clean.shape[0]}")
+                    st.write(f"• Kolom: {df_clean.shape[1]}")
             else:
-                st.error("❌ Preprocessing failed. Please check your data.")
+                st.error("❌ Pra-pemrosesan gagal. Silakan periksa data Anda.")
 
 def show_model_training():
     """Show model training section"""
-    st.header("🤖 Model Training with Random Forest")
+    st.header("🤖 Pelatihan Model dengan Random Forest")
     
     if st.session_state.df_clean is None:
-        st.warning("⚠️ Please preprocess data first in 'Data Preprocessing' section")
+        st.warning("⚠️ Silakan pra-proses data terlebih dahulu di bagian 'Pra-Pemrosesan Data'")
         return
     
-    st.subheader("Model Configuration")
+    st.subheader("Konfigurasi Model")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        n_estimators = st.slider("Number of Trees", 50, 200, 100, 10)
-        max_depth = st.slider("Max Depth", 5, 20, 10, 1)
+        n_estimators = st.slider("Jumlah Pohon", 50, 200, 100, 10)
+        max_depth = st.slider("Kedalaman Maksimum", 5, 20, 10, 1)
     
     with col2:
-        min_samples_split = st.slider("Min Samples Split", 2, 10, 2, 1)
-        min_samples_leaf = st.slider("Min Samples Leaf", 1, 5, 1, 1)
+        min_samples_split = st.slider("Sampel Minimal untuk Split", 2, 10, 2, 1)
+        min_samples_leaf = st.slider("Sampel Minimal untuk Daun", 1, 5, 1, 1)
     
-    test_size = st.slider("Test Size (%)", 20, 40, 30, 5) / 100
+    test_size = st.slider("Ukuran Data Uji (%)", 20, 40, 30, 5) / 100
     random_state = st.number_input("Random State", 0, 100, 42)
     
-    if st.button("🚀 Train Model", use_container_width=True):
-        with st.spinner("Training model..."):
+    if st.button("🚀 Latih Model", use_container_width=True):
+        with st.spinner("Melatih model..."):
             # Split data
             X_train, X_test, y_train, y_test, scaler, feature_cols = split_data(
                 st.session_state.df_clean, test_size, random_state
@@ -683,17 +683,17 @@ def show_model_training():
                         st.session_state.cm = cm
                         
                         # Show training results
-                        st.success("✅ Model trained successfully!")
+                        st.success("✅ Model berhasil dilatih!")
                         
-                        st.subheader("Training Results")
+                        st.subheader("Hasil Pelatihan")
                         
                         col_metric1, col_metric2, col_metric3, col_metric4 = st.columns(4)
                         
                         with col_metric1:
-                            st.metric("Accuracy", f"{metrics['accuracy']:.2%}")
+                            st.metric("Akurasi", f"{metrics['akurasi']:.2%}")
                         
                         with col_metric2:
-                            st.metric("Precision", f"{metrics['precision']:.2%}")
+                            st.metric("Presisi", f"{metrics['presisi']:.2%}")
                         
                         with col_metric3:
                             st.metric("Recall", f"{metrics['recall']:.2%}")
@@ -702,46 +702,46 @@ def show_model_training():
                             st.metric("F1-Score", f"{metrics['f1_score']:.2%}")
                         
                         # Feature importance
-                        st.subheader("Feature Importance")
+                        st.subheader("Importansi Fitur")
                         
                         if hasattr(model, 'feature_importances_'):
                             importance_df = pd.DataFrame({
-                                'Feature': feature_cols,
-                                'Importance': model.feature_importances_
-                            }).sort_values('Importance', ascending=False)
+                                'Fitur': feature_cols,
+                                'Importansi': model.feature_importances_
+                            }).sort_values('Importansi', ascending=False)
                             
                             fig, ax = plt.subplots(figsize=(10, 6))
-                            ax.barh(importance_df['Feature'], importance_df['Importance'], color='lightcoral')
-                            ax.set_xlabel('Importance')
-                            ax.set_title('Feature Importance')
+                            ax.barh(importance_df['Fitur'], importance_df['Importansi'], color='lightcoral')
+                            ax.set_xlabel('Importansi')
+                            ax.set_title('Importansi Fitur')
                             ax.invert_yaxis()
                             st.pyplot(fig)
                         else:
-                            st.info("Feature importance not available for this model")
+                            st.info("Importansi fitur tidak tersedia untuk model ini")
 
 def show_model_evaluation():
     """Show model evaluation section"""
-    st.header("📊 Model Evaluation")
+    st.header("📊 Evaluasi Model")
     
     if st.session_state.model is None:
-        st.warning("⚠️ Please train the model first in 'Model Training' section")
+        st.warning("⚠️ Silakan latih model terlebih dahulu di bagian 'Pelatihan Model'")
         return
     
     if st.session_state.metrics is None:
-        st.warning("⚠️ No evaluation metrics available")
+        st.warning("⚠️ Tidak ada metrik evaluasi yang tersedia")
         return
     
     # Display metrics
-    st.subheader("Performance Metrics")
+    st.subheader("Metrik Performa")
     
     col1, col2 = st.columns([1, 1])
     
     with col1:
         metrics_data = {
-            'Metric': ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
-            'Value': [
-                f"{st.session_state.metrics['accuracy']:.2%}",
-                f"{st.session_state.metrics['precision']:.2%}",
+            'Metrik': ['Akurasi', 'Presisi', 'Recall', 'F1-Score'],
+            'Nilai': [
+                f"{st.session_state.metrics['akurasi']:.2%}",
+                f"{st.session_state.metrics['presisi']:.2%}",
                 f"{st.session_state.metrics['recall']:.2%}",
                 f"{st.session_state.metrics['f1_score']:.2%}"
             ]
@@ -754,38 +754,38 @@ def show_model_evaluation():
         if st.session_state.cm is not None:
             fig, ax = plt.subplots(figsize=(6, 5))
             sns.heatmap(st.session_state.cm, annot=True, fmt='d', cmap='Blues', 
-                       xticklabels=['Low', 'Medium', 'High'],
-                       yticklabels=['Low', 'Medium', 'High'], ax=ax)
-            ax.set_ylabel('Actual')
-            ax.set_xlabel('Predicted')
-            ax.set_title('Confusion Matrix')
+                       xticklabels=['Rendah', 'Sedang', 'Tinggi'],
+                       yticklabels=['Rendah', 'Sedang', 'Tinggi'], ax=ax)
+            ax.set_ylabel('Aktual')
+            ax.set_xlabel('Prediksi')
+            ax.set_title('Matriks Kebingungan')
             st.pyplot(fig)
     
     # Classification Report
-    st.subheader("Detailed Classification Report")
+    st.subheader("Laporan Klasifikasi Detail")
     if st.session_state.report_df is not None:
         st.dataframe(st.session_state.report_df, use_container_width=True)
     
     # Performance visualization
-    st.subheader("Performance Visualization")
+    st.subheader("Visualisasi Performa")
     
     fig, axes = plt.subplots(1, 2, figsize=(12, 4))
     
     # Bar chart of metrics
-    axes[0].bar(['Accuracy', 'Precision', 'Recall', 'F1-Score'],
-               [st.session_state.metrics['accuracy'],
-                st.session_state.metrics['precision'],
+    axes[0].bar(['Akurasi', 'Presisi', 'Recall', 'F1-Score'],
+               [st.session_state.metrics['akurasi'],
+                st.session_state.metrics['presisi'],
                 st.session_state.metrics['recall'],
                 st.session_state.metrics['f1_score']],
                color=['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFE66D'])
     axes[0].set_ylim(0, 1)
-    axes[0].set_ylabel('Score')
-    axes[0].set_title('Model Performance Metrics')
+    axes[0].set_ylabel('Skor')
+    axes[0].set_title('Metrik Performa Model')
     axes[0].tick_params(axis='x', rotation=45)
     
     # Add value labels
-    for i, v in enumerate([st.session_state.metrics['accuracy'],
-                           st.session_state.metrics['precision'],
+    for i, v in enumerate([st.session_state.metrics['akurasi'],
+                           st.session_state.metrics['presisi'],
                            st.session_state.metrics['recall'],
                            st.session_state.metrics['f1_score']]):
         axes[0].text(i, v + 0.02, f'{v:.2%}', ha='center')
@@ -797,101 +797,101 @@ def show_model_evaluation():
             x = np.arange(3)
             width = 0.25
             
-            axes[1].bar(x - width, class_metrics['precision'], width, label='Precision', color='#4ECDC4')
+            axes[1].bar(x - width, class_metrics['precision'], width, label='Presisi', color='#4ECDC4')
             axes[1].bar(x, class_metrics['recall'], width, label='Recall', color='#FF6B6B')
             axes[1].bar(x + width, class_metrics['f1-score'], width, label='F1-Score', color='#45B7D1')
             
-            axes[1].set_xlabel('Class (0=Low, 1=Medium, 2=High)')
-            axes[1].set_ylabel('Score')
-            axes[1].set_title('Metrics by Class')
+            axes[1].set_xlabel('Kelas (0=Rendah, 1=Sedang, 2=Tinggi)')
+            axes[1].set_ylabel('Skor')
+            axes[1].set_title('Metrik per Kelas')
             axes[1].set_xticks(x)
-            axes[1].set_xticklabels(['Low', 'Medium', 'High'])
+            axes[1].set_xticklabels(['Rendah', 'Sedang', 'Tinggi'])
             axes[1].legend()
             axes[1].set_ylim(0, 1)
         except:
             # Simple metric plot if class metrics not available
-            axes[1].text(0.5, 0.5, 'Class metrics\nnot available', 
+            axes[1].text(0.5, 0.5, 'Metrik kelas\ntidak tersedia', 
                         ha='center', va='center', transform=axes[1].transAxes)
-            axes[1].set_title('Class Metrics')
+            axes[1].set_title('Metrik Kelas')
     
     plt.tight_layout()
     st.pyplot(fig)
 
 def show_visualizations():
     """Show data visualizations"""
-    st.header("📈 Data Visualizations")
+    st.header("📈 Visualisasi Data")
     
     if st.session_state.df_clean is None:
-        st.warning("⚠️ Please preprocess data first")
+        st.warning("⚠️ Silakan pra-proses data terlebih dahulu")
         return
     
     viz_option = st.selectbox(
-        "Select Visualization Type",
-        ["Usage Distribution", "Stream Analysis", "College Analysis", 
-         "AI Tools Analysis", "Use Cases Analysis"]
+        "Pilih Jenis Visualisasi",
+        ["Distribusi Penggunaan", "Analisis Jurusan", "Analisis Kampus", 
+         "Analisis Tools AI", "Analisis Kasus Penggunaan"]
     )
     
-    if viz_option == "Usage Distribution":
+    if viz_option == "Distribusi Penggunaan":
         fig, axes = plt.subplots(1, 2, figsize=(12, 4))
         
         # Histogram
-        axes[0].hist(st.session_state.df_clean['Usage_Intensity_Score'], 
+        axes[0].hist(st.session_state.df_clean['Skor_Intensitas_Penggunaan'], 
                     bins=20, color='skyblue', edgecolor='black')
-        axes[0].set_xlabel('Usage Intensity Score')
-        axes[0].set_ylabel('Frequency')
-        axes[0].set_title('Distribution of Usage Scores')
+        axes[0].set_xlabel('Skor Intensitas Penggunaan')
+        axes[0].set_ylabel('Frekuensi')
+        axes[0].set_title('Distribusi Skor Penggunaan')
         
         # Box plot
-        axes[1].boxplot(st.session_state.df_clean['Usage_Intensity_Score'])
-        axes[1].set_ylabel('Usage Intensity Score')
-        axes[1].set_title('Box Plot of Usage Scores')
+        axes[1].boxplot(st.session_state.df_clean['Skor_Intensitas_Penggunaan'])
+        axes[1].set_ylabel('Skor Intensitas Penggunaan')
+        axes[1].set_title('Box Plot Skor Penggunaan')
         
         plt.tight_layout()
         st.pyplot(fig)
     
-    elif viz_option == "Stream Analysis":
+    elif viz_option == "Analisis Jurusan":
         fig, axes = plt.subplots(1, 2, figsize=(12, 4))
         
         # Average usage by stream
-        stream_avg = st.session_state.df_clean.groupby('Stream')['Usage_Intensity_Score'].mean().sort_values()
+        stream_avg = st.session_state.df_clean.groupby('Jurusan')['Skor_Intensitas_Penggunaan'].mean().sort_values()
         stream_avg.plot(kind='barh', ax=axes[0], color='lightcoral')
-        axes[0].set_xlabel('Average Score')
-        axes[0].set_title('Average AI Usage by Stream')
+        axes[0].set_xlabel('Skor Rata-rata')
+        axes[0].set_title('Rata-rata Penggunaan AI per Jurusan')
         
         # Usage level distribution by stream
         try:
-            stream_level = pd.crosstab(st.session_state.df_clean['Stream'], 
-                                     st.session_state.df_clean['Usage_Level'])
+            stream_level = pd.crosstab(st.session_state.df_clean['Jurusan'], 
+                                     st.session_state.df_clean['Tingkat_Penggunaan'])
             stream_level.plot(kind='bar', ax=axes[1], stacked=True)
-            axes[1].set_xlabel('Stream')
-            axes[1].set_ylabel('Count')
-            axes[1].set_title('Usage Level by Stream')
-            axes[1].legend(title='Usage Level')
+            axes[1].set_xlabel('Jurusan')
+            axes[1].set_ylabel('Jumlah')
+            axes[1].set_title('Tingkat Penggunaan per Jurusan')
+            axes[1].legend(title='Tingkat Penggunaan')
             plt.xticks(rotation=45)
         except:
-            axes[1].text(0.5, 0.5, 'Data not available\nfor this visualization', 
+            axes[1].text(0.5, 0.5, 'Data tidak tersedia\nuntuk visualisasi ini', 
                         ha='center', va='center', transform=axes[1].transAxes)
         
         plt.tight_layout()
         st.pyplot(fig)
     
-    elif viz_option == "College Analysis":
+    elif viz_option == "Analisis Kampus":
         # Top colleges by average usage
-        college_avg = st.session_state.df_clean.groupby('College_Name')['Usage_Intensity_Score'].mean().nlargest(10)
+        college_avg = st.session_state.df_clean.groupby('Nama_Kampus')['Skor_Intensitas_Penggunaan'].mean().nlargest(10)
         
         fig, ax = plt.subplots(figsize=(10, 6))
         college_avg.plot(kind='barh', ax=ax, color='lightgreen')
-        ax.set_xlabel('Average Score')
-        ax.set_title('Top 10 Colleges by AI Usage')
+        ax.set_xlabel('Skor Rata-rata')
+        ax.set_title('10 Kampus Teratas berdasarkan Penggunaan AI')
         
         plt.tight_layout()
         st.pyplot(fig)
     
-    elif viz_option == "AI Tools Analysis":
+    elif viz_option == "Analisis Tools AI":
         # Count of AI tools usage
         try:
             all_tools = []
-            for tools in st.session_state.df_clean['AL_Tools_Used']:
+            for tools in st.session_state.df_clean['Tools_AI_Digunakan']:
                 if isinstance(tools, str):
                     tool_list = [t.strip() for t in tools.split(',')]
                     all_tools.extend(tool_list)
@@ -901,23 +901,23 @@ def show_visualizations():
                 
                 fig, ax = plt.subplots(figsize=(10, 5))
                 tool_counts.plot(kind='bar', ax=ax, color='orange')
-                ax.set_xlabel('AI Tool')
-                ax.set_ylabel('Count')
-                ax.set_title('Most Used AI Tools')
+                ax.set_xlabel('Tool AI')
+                ax.set_ylabel('Jumlah')
+                ax.set_title('Tools AI Paling Banyak Digunakan')
                 plt.xticks(rotation=45)
                 
                 plt.tight_layout()
                 st.pyplot(fig)
             else:
-                st.info("No AI tools data available")
+                st.info("Tidak ada data tools AI yang tersedia")
         except:
-            st.info("Unable to analyze AI tools data")
+            st.info("Tidak dapat menganalisis data tools AI")
     
-    elif viz_option == "Use Cases Analysis":
+    elif viz_option == "Analisis Kasus Penggunaan":
         # Common use cases
         try:
             all_cases = []
-            for cases in st.session_state.df_clean['Use_Cases']:
+            for cases in st.session_state.df_clean['Kasus_Penggunaan']:
                 if isinstance(cases, str):
                     case_list = [c.strip() for c in cases.split(',')]
                     all_cases.extend(case_list)
@@ -927,33 +927,33 @@ def show_visualizations():
                 
                 fig, ax = plt.subplots(figsize=(10, 5))
                 case_counts.plot(kind='bar', ax=ax, color='lightblue')
-                ax.set_xlabel('Use Case')
-                ax.set_ylabel('Count')
-                ax.set_title('Most Common AI Use Cases')
+                ax.set_xlabel('Kasus Penggunaan')
+                ax.set_ylabel('Jumlah')
+                ax.set_title('Kasus Penggunaan AI Paling Umum')
                 plt.xticks(rotation=45)
                 
                 plt.tight_layout()
                 st.pyplot(fig)
             else:
-                st.info("No use cases data available")
+                st.info("Tidak ada data kasus penggunaan yang tersedia")
         except:
-            st.info("Unable to analyze use cases data")
+            st.info("Tidak dapat menganalisis data kasus penggunaan")
 
 def show_export_data():
     """Show data export section"""
-    st.header("📥 Export Data & Results")
+    st.header("📥 Ekspor Data & Hasil")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Export Data Files")
+        st.subheader("Ekspor File Data")
         
         if st.session_state.df_raw is not None:
             csv_raw = st.session_state.df_raw.to_csv(index=False)
             st.download_button(
-                label="📥 Raw Data (CSV)",
+                label="📥 Data Mentah (CSV)",
                 data=csv_raw,
-                file_name="ai_usage_raw_data.csv",
+                file_name="data_penggunaan_ai_mentah.csv",
                 mime="text/csv",
                 use_container_width=True
             )
@@ -961,9 +961,9 @@ def show_export_data():
         if st.session_state.df_clean is not None:
             csv_clean = st.session_state.df_clean.to_csv(index=False)
             st.download_button(
-                label="📥 Cleaned Data (CSV)",
+                label="📥 Data Bersih (CSV)",
                 data=csv_clean,
-                file_name="ai_usage_cleaned_data.csv",
+                file_name="data_penggunaan_ai_bersih.csv",
                 mime="text/csv",
                 use_container_width=True
             )
@@ -971,38 +971,38 @@ def show_export_data():
         if st.session_state.model is not None:
             # Export predictions
             predictions_df = pd.DataFrame({
-                'Actual_Usage': st.session_state.y_test,
-                'Predicted_Usage': st.session_state.y_pred
+                'Penggunaan_Aktual': st.session_state.y_test,
+                'Penggunaan_Prediksi': st.session_state.y_pred
             })
             csv_pred = predictions_df.to_csv(index=False)
             st.download_button(
-                label="📥 Predictions (CSV)",
+                label="📥 Prediksi (CSV)",
                 data=csv_pred,
-                file_name="ai_usage_predictions.csv",
+                file_name="prediksi_penggunaan_ai.csv",
                 mime="text/csv",
                 use_container_width=True
             )
     
     with col2:
-        st.subheader("Export Reports")
+        st.subheader("Ekspor Laporan")
         
         if st.session_state.model is not None:
             # Export metrics
             if st.session_state.metrics is not None:
                 metrics_df = pd.DataFrame({
-                    'Metric': ['Accuracy', 'Precision', 'Recall', 'F1-Score'],
-                    'Value': [
-                        st.session_state.metrics['accuracy'],
-                        st.session_state.metrics['precision'],
+                    'Metrik': ['Akurasi', 'Presisi', 'Recall', 'F1-Score'],
+                    'Nilai': [
+                        st.session_state.metrics['akurasi'],
+                        st.session_state.metrics['presisi'],
                         st.session_state.metrics['recall'],
                         st.session_state.metrics['f1_score']
                     ]
                 })
                 csv_metrics = metrics_df.to_csv(index=False)
                 st.download_button(
-                    label="📥 Model Metrics (CSV)",
+                    label="📥 Metrik Model (CSV)",
                     data=csv_metrics,
-                    file_name="model_metrics.csv",
+                    file_name="metrik_model.csv",
                     mime="text/csv",
                     use_container_width=True
                 )
@@ -1010,45 +1010,45 @@ def show_export_data():
             # Export feature importance
             if hasattr(st.session_state.model, 'feature_importances_'):
                 importance_df = pd.DataFrame({
-                    'Feature': st.session_state.feature_cols,
-                    'Importance': st.session_state.model.feature_importances_
-                }).sort_values('Importance', ascending=False)
+                    'Fitur': st.session_state.feature_cols,
+                    'Importansi': st.session_state.model.feature_importances_
+                }).sort_values('Importansi', ascending=False)
                 
                 csv_importance = importance_df.to_csv(index=False)
                 st.download_button(
-                    label="📥 Feature Importance (CSV)",
+                    label="📥 Importansi Fitur (CSV)",
                     data=csv_importance,
-                    file_name="feature_importance.csv",
+                    file_name="importansi_fitur.csv",
                     mime="text/csv",
                     use_container_width=True
                 )
     
     st.markdown("---")
-    st.subheader("📋 Summary Report")
+    st.subheader("📋 Laporan Ringkasan")
     
-    if st.button("Generate Summary Report", use_container_width=True):
-        with st.spinner("Generating report..."):
+    if st.button("Buat Laporan Ringkasan", use_container_width=True):
+        with st.spinner("Membuat laporan..."):
             # Create summary report
             summary = []
             
             if st.session_state.df_raw is not None:
-                summary.append(f"📊 **Data Summary:**")
-                summary.append(f"• Raw Data: {st.session_state.df_raw.shape[0]} rows, {st.session_state.df_raw.shape[1]} columns")
+                summary.append(f"📊 **Ringkasan Data:**")
+                summary.append(f"• Data Mentah: {st.session_state.df_raw.shape[0]} baris, {st.session_state.df_raw.shape[1]} kolom")
             
             if st.session_state.df_clean is not None:
-                summary.append(f"• Cleaned Data: {st.session_state.df_clean.shape[0]} rows, {st.session_state.df_clean.shape[1]} columns")
+                summary.append(f"• Data Bersih: {st.session_state.df_clean.shape[0]} baris, {st.session_state.df_clean.shape[1]} kolom")
                 
                 # Usage level distribution
-                if 'Usage_Level' in st.session_state.df_clean.columns:
-                    level_dist = st.session_state.df_clean['Usage_Level'].value_counts()
-                    summary.append(f"• Usage Level Distribution:")
+                if 'Tingkat_Penggunaan' in st.session_state.df_clean.columns:
+                    level_dist = st.session_state.df_clean['Tingkat_Penggunaan'].value_counts()
+                    summary.append(f"• Distribusi Tingkat Penggunaan:")
                     for level, count in level_dist.items():
-                        summary.append(f"  - {level}: {count} students ({count/len(st.session_state.df_clean):.1%})")
+                        summary.append(f"  - {level}: {count} siswa ({count/len(st.session_state.df_clean):.1%})")
             
             if st.session_state.model is not None and st.session_state.metrics is not None:
-                summary.append(f"\n🤖 **Model Performance:**")
-                summary.append(f"• Accuracy: {st.session_state.metrics['accuracy']:.2%}")
-                summary.append(f"• Precision: {st.session_state.metrics['precision']:.2%}")
+                summary.append(f"\n🤖 **Performa Model:**")
+                summary.append(f"• Akurasi: {st.session_state.metrics['akurasi']:.2%}")
+                summary.append(f"• Presisi: {st.session_state.metrics['presisi']:.2%}")
                 summary.append(f"• Recall: {st.session_state.metrics['recall']:.2%}")
                 summary.append(f"• F1-Score: {st.session_state.metrics['f1_score']:.2%}")
             
@@ -1058,53 +1058,53 @@ def show_export_data():
             # Download summary
             summary_text = "\n".join(summary)
             st.download_button(
-                label="📥 Download Summary Report (TXT)",
+                label="📥 Download Laporan Ringkasan (TXT)",
                 data=summary_text,
-                file_name="ai_analysis_summary.txt",
+                file_name="ringkasan_analisis_ai.txt",
                 mime="text/plain",
                 use_container_width=True
             )
 
 def show_student_dashboard():
     """Show student dashboard"""
-    st.title("👨‍🎓 Student Dashboard")
+    st.title("👨‍🎓 Dashboard Siswa")
     
     menu = st.sidebar.radio(
         "📋 Menu",
-        ["📊 View Analysis", "🎯 Predict My Usage", "📈 Compare with Peers"],
+        ["📊 Lihat Analisis", "🎯 Prediksi Penggunaan Saya", "📈 Bandingkan dengan Teman"],
         index=0
     )
     
-    if menu == "📊 View Analysis":
+    if menu == "📊 Lihat Analisis":
         show_student_analysis()
-    elif menu == "🎯 Predict My Usage":
+    elif menu == "🎯 Prediksi Penggunaan Saya":
         show_student_prediction()
-    elif menu == "📈 Compare with Peers":
+    elif menu == "📈 Bandingkan dengan Teman":
         show_student_comparison()
 
 def show_student_analysis():
     """Show analysis results for students"""
-    st.header("📊 AI Usage Analysis Results")
+    st.header("📊 Hasil Analisis Penggunaan AI")
     
     if st.session_state.df_clean is None:
-        st.info("📢 No analysis data available yet. Please ask your teacher to upload and analyze data.")
+        st.info("📢 Belum ada data analisis yang tersedia. Silakan minta guru untuk mengupload dan menganalisis data.")
         
         # Show sample statistics
-        st.subheader("Sample Statistics")
+        st.subheader("Statistik Sampel")
         sample_df = generate_sample_data(50)
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Average Usage Score", f"{sample_df['Usage_Intensity_Score'].mean():.1f}")
+            st.metric("Rata-rata Skor Penggunaan", f"{sample_df['Skor_Intensitas_Penggunaan'].mean():.1f}")
         with col2:
             # Categorize sample scores
-            sample_levels = pd.cut(sample_df['Usage_Intensity_Score'], 
+            sample_levels = pd.cut(sample_df['Skor_Intensitas_Penggunaan'], 
                                   bins=[0, 15, 30, 50], 
-                                  labels=['Low', 'Medium', 'High'])
+                                  labels=['Rendah', 'Sedang', 'Tinggi'])
             common_level = sample_levels.mode()[0]
-            st.metric("Most Common Level", common_level)
+            st.metric("Tingkat Paling Umum", common_level)
         with col3:
-            st.metric("Sample Size", len(sample_df))
+            st.metric("Ukuran Sampel", len(sample_df))
         
         return
     
@@ -1112,28 +1112,28 @@ def show_student_analysis():
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        avg_score = st.session_state.df_clean['Usage_Intensity_Score'].mean()
-        st.metric("Average Usage Score", f"{avg_score:.1f}")
+        avg_score = st.session_state.df_clean['Skor_Intensitas_Penggunaan'].mean()
+        st.metric("Rata-rata Skor Penggunaan", f"{avg_score:.1f}")
     
     with col2:
-        most_common_level = st.session_state.df_clean['Usage_Level'].mode()[0]
-        st.metric("Most Common Level", most_common_level)
+        most_common_level = st.session_state.df_clean['Tingkat_Penggunaan'].mode()[0]
+        st.metric("Tingkat Paling Umum", most_common_level)
     
     with col3:
         total_students = len(st.session_state.df_clean)
-        st.metric("Total Students", total_students)
+        st.metric("Total Siswa", total_students)
     
     # Distribution chart
-    st.subheader("Usage Level Distribution")
+    st.subheader("Distribusi Tingkat Penggunaan")
     
     fig, ax = plt.subplots(figsize=(10, 4))
-    level_counts = st.session_state.df_clean['Usage_Level'].value_counts()
+    level_counts = st.session_state.df_clean['Tingkat_Penggunaan'].value_counts()
     colors = ['#FF6B6B', '#4ECDC4', '#45B7D1']
     level_counts.plot(kind='bar', ax=ax, color=colors)
     
-    ax.set_xlabel('Usage Level')
-    ax.set_ylabel('Number of Students')
-    ax.set_title('Distribution of AI Usage Levels')
+    ax.set_xlabel('Tingkat Penggunaan')
+    ax.set_ylabel('Jumlah Siswa')
+    ax.set_title('Distribusi Tingkat Penggunaan AI')
     
     # Add percentage labels
     total = level_counts.sum()
@@ -1143,165 +1143,165 @@ def show_student_analysis():
     st.pyplot(fig)
     
     # Recommendations based on analysis
-    st.subheader("📝 Recommendations")
+    st.subheader("📝 Rekomendasi")
     
     col_rec1, col_rec2, col_rec3 = st.columns(3)
     
     with col_rec1:
         st.info("""
-        **For Low Usage (0-15):**
-        • Start with basic AI tools
-        • Use for simple tasks
-        • Attend AI workshops
+        **Untuk Penggunaan Rendah (0-15):**
+        • Mulai dengan tools AI dasar
+        • Gunakan untuk tugas sederhana
+        • Hadiri workshop AI
         """)
     
     with col_rec2:
         st.info("""
-        **For Medium Usage (16-30):**
-        • Explore advanced features
-        • Integrate into projects
-        • Share best practices
+        **Untuk Penggunaan Sedang (16-30):**
+        • Eksplor fitur lanjutan
+        • Integrasikan ke dalam proyek
+        • Bagikan praktik terbaik
         """)
     
     with col_rec3:
         st.info("""
-        **For High Usage (31-50):**
-        • Mentor other students
-        • Research AI applications
-        • Ensure ethical use
+        **Untuk Penggunaan Tinggi (31-50):**
+        • Bimbing siswa lain
+        • Riset aplikasi AI
+        • Pastikan penggunaan etis
         """)
 
 def show_student_prediction():
     """Show prediction interface for students"""
-    st.header("🎯 Predict Your AI Usage Level")
+    st.header("🎯 Prediksi Tingkat Penggunaan AI Anda")
     
-    st.info("Enter your information to predict your AI usage level:")
+    st.info("Masukkan informasi Anda untuk memprediksi tingkat penggunaan AI Anda:")
     
     with st.form("prediction_form"):
         col1, col2 = st.columns(2)
         
         with col1:
-            student_name = st.text_input("Your Name", "John Doe")
-            college = st.text_input("College Name", "Indian Institute of Technology")
-            stream = st.selectbox("Stream", 
-                                ["Engineering", "Science", "Commerce", "Arts", 
-                                 "Medical", "Law", "Management", "Agriculture", "Pharmacy", "Hotel Management"])
+            student_name = st.text_input("Nama Anda", "Budi Santoso")
+            college = st.text_input("Nama Kampus", "Institut Teknologi Bandung")
+            stream = st.selectbox("Jurusan", 
+                                ["Teknik", "Sains", "Bisnis", "Seni", 
+                                 "Kedokteran", "Hukum", "Manajemen", "Pertanian", "Farmasi", "Manajemen Perhotelan"])
         
         with col2:
-            ai_tools = st.multiselect("AI Tools You Use",
+            ai_tools = st.multiselect("Tools AI yang Anda Gunakan",
                                     ["ChatGPT", "Gemini", "Copilot", "Midjourney",
-                                     "Bard", "Claude", "Other"])
+                                     "Bard", "Claude", "Lainnya"])
             
-            use_cases = st.multiselect("Primary Use Cases",
-                                     ["Assignments", "Content Writing", "MCQ Practice",
-                                      "Exam Prep", "Doubt Solving", "Learning new topics",
-                                      "Project Work", "Coding Help", "Resume Writing", "Research"])
+            use_cases = st.multiselect("Kasus Penggunaan Utama",
+                                     ["Tugas", "Penulisan Konten", "Latihan MCQ",
+                                      "Persiapan Ujian", "Pemecahan Masalah", "Mempelajari topik baru",
+                                      "Proyek", "Bantuan Coding", "Penulisan CV", "Penelitian"])
             
-            usage_score = st.slider("Your Usage Intensity Score", 1, 50, 25, 
-                                   help="Estimate how intensely you use AI tools (1=rarely, 50=very frequently)")
+            usage_score = st.slider("Skor Intensitas Penggunaan Anda", 1, 50, 25, 
+                                   help="Perkirakan seberapa intensif Anda menggunakan tools AI (1=jarang, 50=sangat sering)")
         
-        submitted = st.form_submit_button("🔮 Predict My Usage", use_container_width=True)
+        submitted = st.form_submit_button("🔮 Prediksi Penggunaan Saya", use_container_width=True)
         
         if submitted:
             # Simple prediction logic
             if usage_score <= 15:
-                predicted_level = "Low"
+                predicted_level = "Rendah"
                 confidence = 0.85
             elif usage_score <= 30:
-                predicted_level = "Medium"
+                predicted_level = "Sedang"
                 confidence = 0.90
             else:
-                predicted_level = "High"
+                predicted_level = "Tinggi"
                 confidence = 0.95
             
             # Display results
-            st.success(f"✅ Prediction completed for {student_name}")
+            st.success(f"✅ Prediksi selesai untuk {student_name}")
             
             col_result1, col_result2 = st.columns(2)
             
             with col_result1:
-                st.metric("Predicted Usage Level", predicted_level)
-                st.metric("Confidence Level", f"{confidence:.0%}")
+                st.metric("Tingkat Penggunaan Prediksi", predicted_level)
+                st.metric("Tingkat Kepercayaan", f"{confidence:.0%}")
             
             with col_result2:
-                st.metric("Your Score", usage_score)
-                st.metric("AI Tools Used", len(ai_tools))
+                st.metric("Skor Anda", usage_score)
+                st.metric("Tools AI Digunakan", len(ai_tools))
             
             # Personalized recommendations
-            st.subheader("🎯 Personalized Recommendations")
+            st.subheader("🎯 Rekomendasi Personal")
             
-            if predicted_level == "Low":
+            if predicted_level == "Rendah":
                 st.warning("""
-                **You're just getting started with AI!** 
+                **Anda baru memulai dengan AI!** 
                 
-                **Suggestions:**
-                1. **Start Simple**: Try using ChatGPT or Gemini for help with homework
-                2. **Learn Basics**: Take a free online course on AI tools for students
-                3. **Join Communities**: Participate in AI clubs or online forums
-                4. **Set Goals**: Aim to use one AI tool for 30 minutes daily
+                **Saran:**
+                1. **Mulai Sederhana**: Coba gunakan ChatGPT atau Gemini untuk bantuan PR
+                2. **Pelajari Dasar**: Ikuti kursus online gratis tentang tools AI untuk siswa
+                3. **Bergabung Komunitas**: Ikuti klub AI atau forum online
+                4. **Tetapkan Tujuan**: Targetkan menggunakan satu tool AI selama 30 menit sehari
                 
-                **Expected Benefits**: 
-                • Save 2-3 hours per week on assignments
-                • Improve understanding of difficult concepts
-                • Develop valuable digital skills
+                **Manfaat yang Diharapkan**: 
+                • Hemat 2-3 jam per minggu untuk tugas
+                • Tingkatkan pemahaman konsep sulit
+                • Kembangkan keterampilan digital berharga
                 """)
             
-            elif predicted_level == "Medium":
+            elif predicted_level == "Sedang":
                 st.info("""
-                **You're using AI effectively!**
+                **Anda menggunakan AI secara efektif!**
                 
-                **Suggestions:**
-                1. **Advanced Features**: Explore plugins and advanced functionalities
-                2. **Project Integration**: Use AI for research papers and projects
-                3. **Skill Sharing**: Help classmates learn AI tools
-                4. **Specialize**: Focus on AI tools specific to your field
+                **Saran:**
+                1. **Fitur Lanjutan**: Eksplor plugin dan fungsionalitas lanjutan
+                2. **Integrasi Proyek**: Gunakan AI untuk makalah penelitian dan proyek
+                3. **Berbagi Keterampilan**: Bantu teman sekelas belajar tools AI
+                4. **Spesialisasi**: Fokus pada tools AI spesifik bidang Anda
                 
-                **Expected Benefits**:
-                • Enhanced productivity in academic work
-                • Better project outcomes
-                • Development of AI-assisted problem-solving skills
+                **Manfaat yang Diharapkan**:
+                • Produktivitas akademik meningkat
+                • Hasil proyek lebih baik
+                • Pengembangan keterampilan pemecahan masalah berbantuan AI
                 """)
             
             else:
                 st.success("""
-                **You're an advanced AI user!**
+                **Anda pengguna AI tingkat lanjut!**
                 
-                **Suggestions:**
-                1. **Mentor Others**: Share your expertise with fellow students
-                2. **Research Applications**: Explore AI for academic research
-                3. **Ethical Considerations**: Ensure responsible AI use
-                4. **Future Skills**: Learn about AI development and applications
+                **Saran:**
+                1. **Membimbing Lainnya**: Bagikan keahlian Anda dengan sesama siswa
+                2. **Aplikasi Riset**: Eksplor AI untuk penelitian akademik
+                3. **Pertimbangan Etis**: Pastikan penggunaan AI yang bertanggung jawab
+                4. **Keterampilan Masa Depan**: Pelajari tentang pengembangan dan aplikasi AI
                 
-                **Expected Benefits**:
-                • Leadership in AI literacy among peers
-                • Potential for AI-related research projects
-                • Enhanced employability with AI skills
+                **Manfaat yang Diharapkan**:
+                • Kepemimpinan dalam literasi AI di antara teman sebaya
+                • Potensi untuk proyek penelitian terkait AI
+                • Peningkatan kemampuan kerja dengan keterampilan AI
                 """)
             
             # Action plan
-            st.subheader("📋 30-Day Action Plan")
-            days = ["Week 1", "Week 2", "Week 3", "Week 4"]
+            st.subheader("📋 Rencana Aksi 30 Hari")
+            days = ["Minggu 1", "Minggu 2", "Minggu 3", "Minggu 4"]
             
-            if predicted_level == "Low":
+            if predicted_level == "Rendah":
                 actions = [
-                    "Try 3 different AI tools for basic tasks",
-                    "Complete an online tutorial on AI basics",
-                    "Use AI for one major assignment",
-                    "Join an AI learning community"
+                    "Coba 3 tools AI berbeda untuk tugas dasar",
+                    "Selesaikan tutorial online tentang dasar-dasar AI",
+                    "Gunakan AI untuk satu tugas besar",
+                    "Bergabung dengan komunitas pembelajaran AI"
                 ]
-            elif predicted_level == "Medium":
+            elif predicted_level == "Sedang":
                 actions = [
-                    "Master advanced features of your main AI tool",
-                    "Collaborate on an AI-assisted project",
-                    "Teach one AI skill to a classmate",
-                    "Explore AI tools for your career field"
+                    "Kuasi fitur lanjutan dari tool AI utama Anda",
+                    "Kolaborasi dalam proyek berbantuan AI",
+                    "Ajarkan satu keterampilan AI ke teman sekelas",
+                    "Eksplor tools AI untuk bidang karier Anda"
                 ]
             else:
                 actions = [
-                    "Start an AI learning group",
-                    "Begin an AI-related research project",
-                    "Create AI usage guidelines for peers",
-                    "Explore AI development basics"
+                    "Mulai grup belajar AI",
+                    "Mulai proyek penelitian terkait AI",
+                    "Buat panduan penggunaan AI untuk teman sebaya",
+                    "Eksplor dasar-dasar pengembangan AI"
                 ]
             
             for day, action in zip(days, actions):
@@ -1309,74 +1309,74 @@ def show_student_prediction():
 
 def show_student_comparison():
     """Show comparison with peers"""
-    st.header("📈 Compare with Peers")
+    st.header("📈 Bandingkan dengan Teman Sebaya")
     
     if st.session_state.df_clean is None:
-        st.info("📊 No comparison data available. Using sample data for demonstration.")
+        st.info("📊 Tidak ada data perbandingan yang tersedia. Menggunakan data sampel untuk demonstrasi.")
         comparison_df = generate_sample_data(100)
     else:
         comparison_df = st.session_state.df_clean
     
     compare_option = st.selectbox(
-        "Compare by:",
-        ["Stream", "College", "Usage Level", "AI Tools"]
+        "Bandingkan berdasarkan:",
+        ["Jurusan", "Kampus", "Tingkat Penggunaan", "Tools AI"]
     )
     
-    if compare_option == "Stream":
-        st.subheader("Comparison by Academic Stream")
+    if compare_option == "Jurusan":
+        st.subheader("Perbandingan berdasarkan Jurusan Akademik")
         
-        stream_stats = comparison_df.groupby('Stream').agg({
-            'Usage_Intensity_Score': ['mean', 'std', 'count']
+        stream_stats = comparison_df.groupby('Jurusan').agg({
+            'Skor_Intensitas_Penggunaan': ['mean', 'std', 'count']
         }).round(1)
         
         st.dataframe(stream_stats, use_container_width=True)
         
         # Visualization
         fig, ax = plt.subplots(figsize=(10, 5))
-        stream_means = comparison_df.groupby('Stream')['Usage_Intensity_Score'].mean()
+        stream_means = comparison_df.groupby('Jurusan')['Skor_Intensitas_Penggunaan'].mean()
         stream_means.plot(kind='bar', ax=ax, color='lightcoral')
-        ax.set_xlabel('Academic Stream')
-        ax.set_ylabel('Average Usage Score')
-        ax.set_title('Average AI Usage by Academic Stream')
+        ax.set_xlabel('Jurusan Akademik')
+        ax.set_ylabel('Rata-rata Skor Penggunaan')
+        ax.set_title('Rata-rata Penggunaan AI per Jurusan')
         plt.xticks(rotation=45)
         st.pyplot(fig)
     
-    elif compare_option == "College":
-        st.subheader("Comparison by College")
+    elif compare_option == "Kampus":
+        st.subheader("Perbandingan berdasarkan Kampus")
         
         # Top 10 colleges
-        college_stats = comparison_df.groupby('College_Name').agg({
-            'Usage_Intensity_Score': ['mean', 'std', 'count']
-        }).round(1).nlargest(10, ('Usage_Intensity_Score', 'mean'))
+        college_stats = comparison_df.groupby('Nama_Kampus').agg({
+            'Skor_Intensitas_Penggunaan': ['mean', 'std', 'count']
+        }).round(1).nlargest(10, ('Skor_Intensitas_Penggunaan', 'mean'))
         
         st.dataframe(college_stats, use_container_width=True)
     
-    elif compare_option == "Usage Level":
-        st.subheader("Usage Level Analysis")
+    elif compare_option == "Tingkat Penggunaan":
+        st.subheader("Analisis Tingkat Penggunaan")
         
-        if 'Usage_Level' in comparison_df.columns:
-            level_stats = comparison_df.groupby('Usage_Level').agg({
-                'Usage_Intensity_Score': ['mean', 'min', 'max', 'count']
+        if 'Tingkat_Penggunaan' in comparison_df.columns:
+            level_stats = comparison_df.groupby('Tingkat_Penggunaan').agg({
+                'Skor_Intensitas_Penggunaan': ['mean', 'min', 'max', 'count']
             }).round(1)
             
             st.dataframe(level_stats, use_container_width=True)
             
             # Pie chart
             fig, ax = plt.subplots(figsize=(8, 6))
-            level_counts = comparison_df['Usage_Level'].value_counts()
+            level_counts = comparison_df['Tingkat_Penggunaan'].value_counts()
             colors = ['#FF6B6B', '#4ECDC4', '#45B7D1']
             ax.pie(level_counts, labels=level_counts.index, autopct='%1.1f%%', 
                   colors=colors, startangle=90)
-            ax.set_title('Distribution of Usage Levels')
+            ax.set_title('Distribusi Tingkat Penggunaan')
             st.pyplot(fig)
     
-    elif compare_option == "AI Tools":
-        st.subheader("AI Tools Usage Patterns")
+    elif compare_option == "Tools AI":
+        st.subheader("Pola Penggunaan Tools AI")
         
         # Extract and count AI tools
         try:
             all_tools = []
-            for tools in comparison_df['AL_Tools_Used']:
+            for tools in comparison_df['Tools_AI_Digunakan']:
                 if isinstance(tools, str):
                     tool_list = [t.strip() for t in tools.split(',')]
                     all_tools.extend(tool_list)
@@ -1385,38 +1385,38 @@ def show_student_comparison():
                 tool_counts = pd.Series(all_tools).value_counts()
                 
                 # Display top tools
-                st.write("**Most Popular AI Tools:**")
+                st.write("**Tools AI Paling Populer:**")
                 for tool, count in tool_counts.head(10).items():
                     percentage = (count / len(comparison_df)) * 100
-                    st.write(f"• **{tool}**: {count} users ({percentage:.1f}%)")
+                    st.write(f"• **{tool}**: {count} pengguna ({percentage:.1f}%)")
                 
                 # Visualization
                 fig, ax = plt.subplots(figsize=(10, 5))
                 tool_counts.head(10).plot(kind='bar', ax=ax, color='skyblue')
-                ax.set_xlabel('AI Tool')
-                ax.set_ylabel('Number of Users')
-                ax.set_title('Top 10 AI Tools Used')
+                ax.set_xlabel('Tool AI')
+                ax.set_ylabel('Jumlah Pengguna')
+                ax.set_title('10 Tools AI Paling Banyak Digunakan')
                 plt.xticks(rotation=45)
                 st.pyplot(fig)
             else:
-                st.info("No AI tools data available for comparison")
+                st.info("Tidak ada data tools AI untuk perbandingan")
         except:
-            st.info("Unable to analyze AI tools data")
+            st.info("Tidak dapat menganalisis data tools AI")
     
     # Personal reflection
-    st.subheader("🤔 Self-Reflection Questions")
+    st.subheader("🤔 Pertanyaan Refleksi Diri")
     
     reflection_questions = [
-        "How does your AI usage compare to your peers in the same stream?",
-        "What AI tools are most popular among students with high usage scores?",
-        "How could you improve your AI usage based on these insights?",
-        "What benefits have you experienced from using AI tools in your studies?"
+        "Bagaimana penggunaan AI Anda dibandingkan dengan teman sebaya di jurusan yang sama?",
+        "Tools AI apa yang paling populer di antara siswa dengan skor penggunaan tinggi?",
+        "Bagaimana Anda bisa meningkatkan penggunaan AI berdasarkan wawasan ini?",
+        "Manfaat apa yang telah Anda alami dari menggunakan tools AI dalam studi Anda?"
     ]
     
     for i, question in enumerate(reflection_questions, 1):
-        with st.expander(f"Question {i}: {question}"):
-            st.text_area(f"Your reflection on question {i}", 
-                        placeholder="Type your thoughts here...", 
+        with st.expander(f"Pertanyaan {i}: {question}"):
+            st.text_area(f"Refleksi Anda untuk pertanyaan {i}", 
+                        placeholder="Ketik pemikiran Anda di sini...", 
                         height=100, 
                         key=f"reflection_{i}")
 
