@@ -357,23 +357,7 @@ def main():
                         st.rerun()
                     else:
                         st.error("❌ Kredensial tidak valid!")
-            
-            with col2:
-                if st.button("Demo Cepat", use_container_width=True):
-                    st.session_state.terautentikasi = True
-                    st.session_state.tipe_pengguna = "guru"
-                    st.session_state.df_raw = generate_sample_data()
-                    st.success("✅ Mode demo diaktifkan!")
-                    st.rerun()
-            
-            st.markdown("---")
-            st.info("**Kredensial Demo:**")
-            st.write("- 👨‍🏫 Guru: guru / guru123")
-            st.write("- 👨‍🎓 Siswa: siswa / siswa123")
-            
-        else:
-            st.success(f"✅ Login sebagai {st.session_state.tipe_pengguna}")
-            st.markdown("---")
+        
             
             if st.button("🔄 Reset Semua Data", use_container_width=True):
                 for key in list(st.session_state.keys()):
