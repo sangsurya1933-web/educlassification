@@ -417,25 +417,6 @@ def show_welcome_page():
         - Kasus_Penggunaan
         """)
     
-    with col2:
-        # Show sample data
-        st.subheader("Data Sampel")
-        sample_df = generate_sample_data(5)
-        st.dataframe(sample_df, use_container_width=True)
-        
-        # Download sample CSV
-        csv = sample_df.to_csv(index=False)
-        st.download_button(
-            label="Download CSV Sampel",
-            data=csv,
-            file_name="sampel_data_penggunaan_ai.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
-    
-    st.markdown("---")
-    st.info("**Silakan login dari sidebar untuk melanjutkan**")
-
 def show_teacher_dashboard():
     """Show teacher dashboard"""
     st.title(" Dashboard Guru")
