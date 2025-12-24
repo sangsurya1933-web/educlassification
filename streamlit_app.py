@@ -16,7 +16,7 @@ try:
     from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
     ML_AVAILABLE = True
 except ImportError as e:
-    st.warning(f"⚠️ Library scikit-learn tidak tersedia. Error: {str(e)}")
+    st.warning(f"Library scikit-learn tidak tersedia. Error: {str(e)}")
     st.info("Install dengan: pip install scikit-learn")
     ML_AVAILABLE = False
 
@@ -99,7 +99,7 @@ def load_data(uploaded_file=None):
             elif file_extension in ['xlsx', 'xls']:
                 df = pd.read_excel(uploaded_file)
             else:
-                st.error("❌ Silakan upload file CSV atau Excel")
+                st.error("Silakan upload file CSV atau Excel")
                 return None
         else:
             # Use sample data
@@ -107,7 +107,7 @@ def load_data(uploaded_file=None):
         
         # Basic validation
         if df.empty:
-            st.error("❌ File yang diupload kosong")
+            st.error("File yang diupload kosong")
             return None
         
         # Ensure required columns exist
@@ -117,18 +117,18 @@ def load_data(uploaded_file=None):
         # Check for missing columns
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
-            st.warning(f"⚠️ Kolom yang hilang: {missing_columns}")
+            st.warning(f"Kolom yang hilang: {missing_columns}")
             st.info("Menggunakan data sampel sebagai gantinya")
             df = generate_sample_data()
         
         # Show basic info
-        st.success(f"✅ Data berhasil dimuat! Ukuran: {df.shape}")
-        st.info(f"📊 Kolom: {', '.join(df.columns.tolist())}")
+        st.success(f"Data berhasil dimuat! Ukuran: {df.shape}")
+        st.info(f"Kolom: {', '.join(df.columns.tolist())}")
         
         return df
         
     except Exception as e:
-        st.error(f"❌ Error memuat data: {str(e)}")
+        st.error(f"Error memuat data: {str(e)}")
         st.info("Menggunakan data sampel sebagai gantinya")
         return generate_sample_data()
 
@@ -137,7 +137,7 @@ def preprocess_data(df):
     """Preprocess the data for machine learning"""
     try:
         if df is None:
-            st.error("❌ Tidak ada data untuk diproses")
+            st.error("Tidak ada data untuk diproses")
             return None, None
         
         df_clean = df.copy()
@@ -145,7 +145,7 @@ def preprocess_data(df):
         # 1. Check for missing values
         missing_values = df_clean.isnull().sum()
         if missing_values.sum() > 0:
-            st.warning(f"⚠️ Nilai yang hilang ditemukan: {missing_values[missing_values > 0].to_dict()}")
+            st.warning(f"Nilai yang hilang ditemukan: {missing_values[missing_values > 0].to_dict()}")
             
             # Fill missing values
             for col in df_clean.columns:
@@ -177,7 +177,7 @@ def preprocess_data(df):
         removed_rows = initial_rows - len(df_clean)
         
         if removed_rows > 0:
-            st.warning(f"⚠️ Dihapus {removed_rows} baris dengan Skor_Intensitas_Penggunaan tidak valid")
+            st.warning(f"Dihapus {removed_rows} baris dengan Skor_Intensitas_Penggunaan tidak valid")
         
         # 4. Simple encoding for demonstration
         label_encoders = {}
@@ -204,11 +204,11 @@ def preprocess_data(df):
         df_clean['Tingkat_Penggunaan_Encoded'] = df_clean['Tingkat_Penggunaan'].map(usage_level_mapping)
         label_encoders['Tingkat_Penggunaan'] = usage_level_mapping
         
-        st.success(f"✅ Pra-pemrosesan data selesai! Ukuran akhir: {df_clean.shape}")
+        st.success(f"Pra-pemrosesan data selesai! Ukuran akhir: {df_clean.shape}")
         return df_clean, label_encoders
         
     except Exception as e:
-        st.error(f"❌ Error dalam pra-pemrosesan: {str(e)}")
+        st.error(f"Error dalam pra-pemrosesan: {str(e)}")
         return None, None
 
 # Function to split data
@@ -222,7 +222,7 @@ def split_data(df_clean, test_size=0.3, random_state=42):
         available_features = [col for col in feature_cols if col in df_clean.columns]
         
         if len(available_features) < 2:
-            st.error("❌ Tidak cukup fitur yang tersedia untuk pelatihan")
+            st.error("Tidak cukup fitur yang tersedia untuk pelatihan")
             return None, None, None, None, None, None
         
         X = df_clean[available_features]
@@ -238,11 +238,11 @@ def split_data(df_clean, test_size=0.3, random_state=42):
         X_train_scaled = scaler.fit_transform(X_train)
         X_test_scaled = scaler.transform(X_test)
         
-        st.success(f"✅ Pembagian data selesai: Latih={len(X_train)}, Uji={len(X_test)}")
+        st.success(f"Pembagian data selesai: Latih={len(X_train)}, Uji={len(X_test)}")
         return X_train_scaled, X_test_scaled, y_train, y_test, scaler, available_features
         
     except Exception as e:
-        st.error(f"❌ Error dalam pembagian data: {str(e)}")
+        st.error(f"Error dalam pembagian data: {str(e)}")
         return None, None, None, None, None, None
 
 # Function to train model
@@ -262,11 +262,11 @@ def train_model(X_train, y_train, **kwargs):
         model = RandomForestClassifier(**params)
         model.fit(X_train, y_train)
         
-        st.success("✅ Pelatihan model selesai!")
+        st.success("Pelatihan model selesai!")
         return model
         
     except Exception as e:
-        st.error(f"❌ Error dalam pelatihan model: {str(e)}")
+        st.error(f"Error dalam pelatihan model: {str(e)}")
         return None
 
 # Function to evaluate model
@@ -301,7 +301,7 @@ def evaluate_model(model, X_test, y_test):
         return y_pred, report_df, cm, metrics
         
     except Exception as e:
-        st.error(f"❌ Error dalam evaluasi model: {str(e)}")
+        st.error(f"Error dalam evaluasi model: {str(e)}")
         return None, None, None, None
 
 # Function to create download link
@@ -323,7 +323,7 @@ def main():
     # Check if ML libraries are available
     if not ML_AVAILABLE:
         st.error("""
-        ❌ **Library yang diperlukan tidak tersedia!**
+        **Library yang diperlukan tidak tersedia!**
         
         Silakan install library yang diperlukan:
         ```
@@ -334,7 +334,7 @@ def main():
     
     # Login sidebar
     with st.sidebar:
-        st.title("🔐 Sistem Login")
+        st.title("Sistem Login")
         
         if not st.session_state.terautentikasi:
             st.markdown("---")
@@ -348,27 +348,27 @@ def main():
                     if tipe_pengguna == "Guru" and username == "guru" and password == "guru123":
                         st.session_state.terautentikasi = True
                         st.session_state.tipe_pengguna = "guru"
-                        st.success("✅ Login guru berhasil!")
+                        st.success("Login guru berhasil!")
                         st.rerun()
                     elif tipe_pengguna == "Siswa" and username == "siswa" and password == "siswa123":
                         st.session_state.terautentikasi = True
                         st.session_state.tipe_pengguna = "siswa"
-                        st.success("✅ Login siswa berhasil!")
+                        st.success("Login siswa berhasil!")
                         st.rerun()
                     else:
-                        st.error("❌ Kredensial tidak valid!")
+                        st.error("Kredensial tidak valid!")
             
      
         else:
-            st.success(f"✅ Login sebagai {st.session_state.tipe_pengguna}")
+            st.success(f"Login sebagai {st.session_state.tipe_pengguna}")
             st.markdown("---")
             
-            if st.button("🔄 Reset Semua Data", use_container_width=True):
+            if st.button("Reset Semua Data", use_container_width=True):
                 for key in list(st.session_state.keys()):
                     del st.session_state[key]
                 st.rerun()
             
-            if st.button("🚪 Keluar", use_container_width=True):
+            if st.button("Keluar", use_container_width=True):
                 st.session_state.terautentikasi = False
                 st.session_state.tipe_pengguna = None
                 st.rerun()
@@ -386,7 +386,7 @@ def main():
 
 def show_welcome_page():
     """Show welcome page for unauthenticated users"""
-    st.title("🎓 Sistem Analisis Penggunaan AI")
+    st.title("Sistem Analisis Penggunaan AI")
     
     col1, col2 = st.columns([2, 1])
     
@@ -398,18 +398,18 @@ def show_welcome_page():
         menggunakan algoritma Random Forest.
         
         **Fitur:**
-        👨‍🏫 **Dashboard Guru:**
-        - 📁 Upload dan kelola data siswa
-        - 🔧 Pra-pemrosesan dan pembersihan data
-        - 🤖 Latih model Random Forest
-        - 📊 Evaluasi performa model
-        - 📈 Visualisasi hasil
-        - 📥 Ekspor hasil analisis
+        **Dashboard Guru:**
+        - Upload dan kelola data siswa
+        - Pra-pemrosesan dan pembersihan data
+        - Latih model Random Forest
+        - Evaluasi performa model
+        - Visualisasi hasil
+        - Ekspor hasil analisis
         
-        👨‍🎓 **Dashboard Siswa:**
-        - 📊 Lihat hasil analisis
-        - 🎯 Prediksi tingkat penggunaan AI pribadi
-        - 📈 Bandingkan dengan teman sebaya
+        **Dashboard Siswa:**
+        - Lihat hasil analisis
+        - Prediksi tingkat penggunaan AI pribadi
+        - Bandingkan dengan teman sebaya
         
         **Persyaratan Data:**
         Upload file CSV dengan kolom berikut:
@@ -438,37 +438,37 @@ def show_welcome_page():
         )
     
     st.markdown("---")
-    st.info("👈 **Silakan login dari sidebar untuk melanjutkan**")
+    st.info("**Silakan login dari sidebar untuk melanjutkan**")
 
 def show_teacher_dashboard():
     """Show teacher dashboard"""
-    st.title("👨‍🏫 Dashboard Guru")
+    st.title("Dashboard Guru")
     st.markdown("**Analisis Penggunaan AI terhadap Performa Akademik menggunakan Random Forest**")
     
     # Teacher menu
     menu = st.sidebar.radio(
-        "📋 Menu",
-        ["📁 Manajemen Data", "🔧 Pra-Pemrosesan Data", "🤖 Pelatihan Model", 
-         "📊 Evaluasi Model", "📈 Visualisasi", "📥 Ekspor Data"],
+        "Menu",
+        ["Manajemen Data", "Pra-Pemrosesan Data", "Pelatihan Model", 
+         "Evaluasi Model", "Visualisasi", "Ekspor Data"],
         index=0
     )
     
-    if menu == "📁 Manajemen Data":
+    if menu == "Manajemen Data":
         show_data_management()
-    elif menu == "🔧 Pra-Pemrosesan Data":
+    elif menu == "Pra-Pemrosesan Data":
         show_data_preprocessing()
-    elif menu == "🤖 Pelatihan Model":
+    elif menu == "Pelatihan Model":
         show_model_training()
-    elif menu == "📊 Evaluasi Model":
+    elif menu == "Evaluasi Model":
         show_model_evaluation()
-    elif menu == "📈 Visualisasi":
+    elif menu == "Visualisasi":
         show_visualizations()
-    elif menu == "📥 Ekspor Data":
+    elif menu == "Ekspor Data":
         show_export_data()
 
 def show_data_management():
     """Show data management section"""
-    st.header("📁 Manajemen Data")
+    st.header("Manajemen Data")
     
     col1, col2 = st.columns([1, 1])
     
@@ -482,18 +482,18 @@ def show_data_management():
         )
         
         if uploaded_file is not None:
-            if st.button("📂 Muat Data", use_container_width=True):
+            if st.button("Muat Data", use_container_width=True):
                 with st.spinner("Memuat data..."):
                     df = load_data(uploaded_file)
                     if df is not None:
                         st.session_state.df_raw = df
-                        st.success(f"✅ Data dimuat: {len(df)} catatan")
+                        st.success(f"Data dimuat: {len(df)} catatan")
         
         st.subheader("Atau Gunakan Data Sampel")
-        if st.button("🎲 Generate Data Sampel", use_container_width=True):
+        if st.button("Generate Data Sampel", use_container_width=True):
             with st.spinner("Membuat data sampel..."):
                 st.session_state.df_raw = generate_sample_data()
-                st.success(f"✅ Data sampel dibuat: {len(st.session_state.df_raw)} catatan")
+                st.success(f"Data sampel dibuat: {len(st.session_state.df_raw)} catatan")
     
     with col2:
         if st.session_state.df_raw is not None:
@@ -506,7 +506,7 @@ def show_data_management():
             st.dataframe(st.session_state.df_raw.head(10), use_container_width=True)
             
             # Data statistics
-            with st.expander("📊 Statistik Data", expanded=True):
+            with st.expander("Statistik Data", expanded=True):
                 col_stats1, col_stats2 = st.columns(2)
                 
                 with col_stats1:
@@ -522,7 +522,7 @@ def show_data_management():
                         st.write(f"• {col}: {dtype}")
             
             # Column distribution
-            with st.expander("📈 Distribusi Kolom"):
+            with st.expander("Distribusi Kolom"):
                 selected_col = st.selectbox(
                     "Pilih kolom",
                     st.session_state.df_raw.columns.tolist()
@@ -544,20 +544,20 @@ def show_data_management():
                     ax.set_ylabel('Frekuensi')
                     st.pyplot(fig)
         else:
-            st.info("👈 Silakan upload data atau buat data sampel untuk memulai")
+            st.info("Silakan upload data atau buat data sampel untuk memulai")
 
 def show_data_preprocessing():
     """Show data preprocessing section"""
-    st.header("🔧 Pra-Pemrosesan Data")
+    st.header("Pra-Pemrosesan Data")
     
     if st.session_state.df_raw is None:
-        st.warning("⚠️ Silakan muat data terlebih dahulu di bagian 'Manajemen Data'")
+        st.warning("Silakan muat data terlebih dahulu di bagian 'Manajemen Data'")
         return
     
     st.subheader("Pratinjau Data Mentah")
     st.dataframe(st.session_state.df_raw.head(), use_container_width=True)
     
-    if st.button("🔄 Mulai Pra-Pemrosesan", use_container_width=True):
+    if st.button("Mulai Pra-Pemrosesan", use_container_width=True):
         with st.spinner("Memproses data..."):
             df_clean, label_encoders = preprocess_data(st.session_state.df_raw)
             
@@ -595,7 +595,7 @@ def show_data_preprocessing():
                     st.pyplot(fig)
                 
                 # Show preprocessing details
-                with st.expander("🔍 Detail Pra-Pemrosesan"):
+                with st.expander("Detail Pra-Pemrosesan"):
                     st.write("**Fitur yang Dibuat:**")
                     st.write("• Jurusan_Encoded: Kode untuk kategori jurusan")
                     st.write("• Jumlah_Tools: Jumlah tools AI yang digunakan")
@@ -607,14 +607,14 @@ def show_data_preprocessing():
                     st.write(f"• Baris: {df_clean.shape[0]}")
                     st.write(f"• Kolom: {df_clean.shape[1]}")
             else:
-                st.error("❌ Pra-pemrosesan gagal. Silakan periksa data Anda.")
+                st.error("Pra-pemrosesan gagal. Silakan periksa data Anda.")
 
 def show_model_training():
     """Show model training section"""
-    st.header("🤖 Pelatihan Model dengan Random Forest")
+    st.header("Pelatihan Model dengan Random Forest")
     
     if st.session_state.df_clean is None:
-        st.warning("⚠️ Silakan pra-proses data terlebih dahulu di bagian 'Pra-Pemrosesan Data'")
+        st.warning("Silakan pra-proses data terlebih dahulu di bagian 'Pra-Pemrosesan Data'")
         return
     
     st.subheader("Konfigurasi Model")
@@ -632,7 +632,7 @@ def show_model_training():
     test_size = st.slider("Ukuran Data Uji (%)", 20, 40, 30, 5) / 100
     random_state = st.number_input("Random State", 0, 100, 42)
     
-    if st.button("🚀 Latih Model", use_container_width=True):
+    if st.button("Latih Model", use_container_width=True):
         with st.spinner("Melatih model..."):
             # Split data
             X_train, X_test, y_train, y_test, scaler, feature_cols = split_data(
@@ -671,7 +671,7 @@ def show_model_training():
                         st.session_state.cm = cm
                         
                         # Show training results
-                        st.success("✅ Model berhasil dilatih!")
+                        st.success("Model berhasil dilatih!")
                         
                         st.subheader("Hasil Pelatihan")
                         
@@ -709,14 +709,14 @@ def show_model_training():
 
 def show_model_evaluation():
     """Show model evaluation section"""
-    st.header("📊 Evaluasi Model")
+    st.header("Evaluasi Model")
     
     if st.session_state.model is None:
-        st.warning("⚠️ Silakan latih model terlebih dahulu di bagian 'Pelatihan Model'")
+        st.warning("Silakan latih model terlebih dahulu di bagian 'Pelatihan Model'")
         return
     
     if st.session_state.metrics is None:
-        st.warning("⚠️ Tidak ada metrik evaluasi yang tersedia")
+        st.warning("Tidak ada metrik evaluasi yang tersedia")
         return
     
     # Display metrics
@@ -807,7 +807,7 @@ def show_model_evaluation():
 
 def show_visualizations():
     """Show data visualizations"""
-    st.header("📈 Visualisasi Data")
+    st.header("Visualisasi Data")
     
     if st.session_state.df_clean is None:
         st.warning("⚠️ Silakan pra-proses data terlebih dahulu")
@@ -929,7 +929,7 @@ def show_visualizations():
 
 def show_export_data():
     """Show data export section"""
-    st.header("📥 Ekspor Data & Hasil")
+    st.header("Ekspor Data & Hasil")
     
     col1, col2 = st.columns(2)
     
@@ -949,7 +949,7 @@ def show_export_data():
         if st.session_state.df_clean is not None:
             csv_clean = st.session_state.df_clean.to_csv(index=False)
             st.download_button(
-                label="📥 Data Bersih (CSV)",
+                label="Data Bersih (CSV)",
                 data=csv_clean,
                 file_name="data_penggunaan_ai_bersih.csv",
                 mime="text/csv",
@@ -964,7 +964,7 @@ def show_export_data():
             })
             csv_pred = predictions_df.to_csv(index=False)
             st.download_button(
-                label="📥 Prediksi (CSV)",
+                label="Prediksi (CSV)",
                 data=csv_pred,
                 file_name="prediksi_penggunaan_ai.csv",
                 mime="text/csv",
@@ -1004,7 +1004,7 @@ def show_export_data():
                 
                 csv_importance = importance_df.to_csv(index=False)
                 st.download_button(
-                    label="📥 Importansi Fitur (CSV)",
+                    label="Importansi Fitur (CSV)",
                     data=csv_importance,
                     file_name="importansi_fitur.csv",
                     mime="text/csv",
@@ -1012,7 +1012,7 @@ def show_export_data():
                 )
     
     st.markdown("---")
-    st.subheader("📋 Laporan Ringkasan")
+    st.subheader("Laporan Ringkasan")
     
     if st.button("Buat Laporan Ringkasan", use_container_width=True):
         with st.spinner("Membuat laporan..."):
@@ -1020,7 +1020,7 @@ def show_export_data():
             summary = []
             
             if st.session_state.df_raw is not None:
-                summary.append(f"📊 **Ringkasan Data:**")
+                summary.append(f"**Ringkasan Data:**")
                 summary.append(f"• Data Mentah: {st.session_state.df_raw.shape[0]} baris, {st.session_state.df_raw.shape[1]} kolom")
             
             if st.session_state.df_clean is not None:
@@ -1034,7 +1034,7 @@ def show_export_data():
                         summary.append(f"  - {level}: {count} siswa ({count/len(st.session_state.df_clean):.1%})")
             
             if st.session_state.model is not None and st.session_state.metrics is not None:
-                summary.append(f"\n🤖 **Performa Model:**")
+                summary.append(f"\n**Performa Model:**")
                 summary.append(f"• Akurasi: {st.session_state.metrics['akurasi']:.2%}")
                 summary.append(f"• Presisi: {st.session_state.metrics['presisi']:.2%}")
                 summary.append(f"• Recall: {st.session_state.metrics['recall']:.2%}")
@@ -1046,7 +1046,7 @@ def show_export_data():
             # Download summary
             summary_text = "\n".join(summary)
             st.download_button(
-                label="📥 Download Laporan Ringkasan (TXT)",
+                label="Download Laporan Ringkasan (TXT)",
                 data=summary_text,
                 file_name="ringkasan_analisis_ai.txt",
                 mime="text/plain",
@@ -1055,27 +1055,27 @@ def show_export_data():
 
 def show_student_dashboard():
     """Show student dashboard"""
-    st.title("👨‍🎓 Dashboard Siswa")
+    st.title("Dashboard Siswa")
     
     menu = st.sidebar.radio(
         "📋 Menu",
-        ["📊 Lihat Analisis", "🎯 Prediksi Penggunaan Saya", "📈 Bandingkan dengan Teman"],
+        ["Lihat Analisis", "Prediksi Penggunaan Saya", "Bandingkan dengan Teman"],
         index=0
     )
     
-    if menu == "📊 Lihat Analisis":
+    if menu == "Lihat Analisis":
         show_student_analysis()
-    elif menu == "🎯 Prediksi Penggunaan Saya":
+    elif menu == "Prediksi Penggunaan Saya":
         show_student_prediction()
-    elif menu == "📈 Bandingkan dengan Teman":
+    elif menu == "Bandingkan dengan Teman":
         show_student_comparison()
 
 def show_student_analysis():
     """Show analysis results for students"""
-    st.header("📊 Hasil Analisis Penggunaan AI")
+    st.header("Hasil Analisis Penggunaan AI")
     
     if st.session_state.df_clean is None:
-        st.info("📢 Belum ada data analisis yang tersedia. Silakan minta guru untuk mengupload dan menganalisis data.")
+        st.info("Belum ada data analisis yang tersedia. Silakan minta guru untuk mengupload dan menganalisis data.")
         
         # Show sample statistics
         st.subheader("Statistik Sampel")
@@ -1131,7 +1131,7 @@ def show_student_analysis():
     st.pyplot(fig)
     
     # Recommendations based on analysis
-    st.subheader("📝 Rekomendasi")
+    st.subheader("Rekomendasi")
     
     col_rec1, col_rec2, col_rec3 = st.columns(3)
     
@@ -1161,7 +1161,7 @@ def show_student_analysis():
 
 def show_student_prediction():
     """Show prediction interface for students"""
-    st.header("🎯 Prediksi Tingkat Penggunaan AI Anda")
+    st.header("Prediksi Tingkat Penggunaan AI Anda")
     
     st.info("Masukkan informasi Anda untuk memprediksi tingkat penggunaan AI Anda:")
     
@@ -1188,7 +1188,7 @@ def show_student_prediction():
             usage_score = st.slider("Skor Intensitas Penggunaan Anda", 1, 50, 25, 
                                    help="Perkirakan seberapa intensif Anda menggunakan tools AI (1=jarang, 50=sangat sering)")
         
-        submitted = st.form_submit_button("🔮 Prediksi Penggunaan Saya", use_container_width=True)
+        submitted = st.form_submit_button("Prediksi Penggunaan Saya", use_container_width=True)
         
         if submitted:
             # Simple prediction logic
@@ -1203,7 +1203,7 @@ def show_student_prediction():
                 confidence = 0.95
             
             # Display results
-            st.success(f"✅ Prediksi selesai untuk {student_name}")
+            st.success(f"Prediksi selesai untuk {student_name}")
             
             col_result1, col_result2 = st.columns(2)
             
@@ -1216,7 +1216,7 @@ def show_student_prediction():
                 st.metric("Tools AI Digunakan", len(ai_tools))
             
             # Personalized recommendations
-            st.subheader("🎯 Rekomendasi Personal")
+            st.subheader("Rekomendasi Personal")
             
             if predicted_level == "Rendah":
                 st.warning("""
@@ -1267,7 +1267,7 @@ def show_student_prediction():
                 """)
             
             # Action plan
-            st.subheader("📋 Rencana Aksi 30 Hari")
+            st.subheader("Rencana Aksi 30 Hari")
             days = ["Minggu 1", "Minggu 2", "Minggu 3", "Minggu 4"]
             
             if predicted_level == "Rendah":
@@ -1297,10 +1297,10 @@ def show_student_prediction():
 
 def show_student_comparison():
     """Show comparison with peers"""
-    st.header("📈 Bandingkan dengan Teman Sebaya")
+    st.header("Bandingkan dengan Teman Sebaya")
     
     if st.session_state.df_clean is None:
-        st.info("📊 Tidak ada data perbandingan yang tersedia. Menggunakan data sampel untuk demonstrasi.")
+        st.info("Tidak ada data perbandingan yang tersedia. Menggunakan data sampel untuk demonstrasi.")
         comparison_df = generate_sample_data(100)
     else:
         comparison_df = st.session_state.df_clean
@@ -1392,7 +1392,7 @@ def show_student_comparison():
             st.info("Tidak dapat menganalisis data tools AI")
     
     # Personal reflection
-    st.subheader("🤔 Pertanyaan Refleksi Diri")
+    st.subheader("Pertanyaan Refleksi Diri")
     
     reflection_questions = [
         "Bagaimana penggunaan AI Anda dibandingkan dengan teman sebaya di jurusan yang sama?",
