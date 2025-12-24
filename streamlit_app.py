@@ -416,7 +416,50 @@ def show_welcome_page():
         - Skor_Intensitas_Penggunaan (1-50)
         - Kasus_Penggunaan
         """)
+      with col2:
+        # Show sample data
+        st.subheader("📋 Data Sampel")
+        sample_df = generate_sample_data(5)
+        st.dataframe(sample_df, use_container_width=True)
+        
+        # Download sample CSV
+        csv = sample_df.to_csv(index=False)
+        st.download_button(
+            label="📥 Download CSV Sampel",
+            data=csv,
+            file_name="sampel_data_penggunaan_ai.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
     
+    st.markdown("---")
+    st.info("👈 **Silakan login dari sidebar untuk melanjutkan**")
+
+def show_teacher_dashboard():
+    """Show teacher dashboard"""
+    st.title("👨‍🏫 Dashboard Guru")
+    st.markdown("**Analisis Penggunaan AI terhadap Performa Akademik menggunakan Random Forest**")
+    
+    # Teacher menu
+    menu = st.sidebar.radio(
+        "📋 Menu",
+        [" Manajemen Data", " Pra-Pemrosesan Data", " Pelatihan Model", 
+         " Evaluasi Model", " Visualisasi", " Ekspor Data"],
+        index=0
+    )
+    
+    if menu == " Manajemen Data":
+        show_data_management()
+    elif menu == " Pra-Pemrosesan Data":
+        show_data_preprocessing()
+    elif menu == " Pelatihan Model":
+        show_model_training()
+    elif menu == " Evaluasi Model":
+        show_model_evaluation()
+    elif menu == " Visualisasi":
+        show_visualizations()
+    elif menu == " Ekspor Data":
+        show_export_data()
 def show_teacher_dashboard():
     """Show teacher dashboard"""
     st.title(" Dashboard Guru")
