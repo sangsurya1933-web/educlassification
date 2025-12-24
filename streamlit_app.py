@@ -416,6 +416,7 @@ def show_welcome_page():
         - Skor_Intensitas_Penggunaan (1-50)
         - Kasus_Penggunaan
         """)
+        
       with col2:
         # Show sample data
         st.subheader("📋 Data Sampel")
