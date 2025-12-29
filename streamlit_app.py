@@ -1,1427 +1,1328 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+warnings.filterwarnings('ignore')
+
+# Machine learning libraries
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler, MinMaxScaler
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    classification_report, confusion_matrix, mean_squared_error,
+    r2_score, mean_absolute_error
+)
+import joblib
 import plotly.express as px
 import plotly.graph_objects as go
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import accuracy_score, classification_report
-import io
-import base64
+from plotly.subplots import make_subplots
 
-# ============================================
-# KONFIGURASI HALAMAN
-# ============================================
+# Set halaman
 st.set_page_config(
-    page_title="AI Academic Analyzer",
-    page_icon="🧠",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="Analisis Penggunaan AI - Performa Akademik",
+    page_icon="🎓",
+    layout="wide"
 )
 
-# ============================================
-# STYLE CUSTOM
-# ============================================
-st.markdown("""
-<style>
-    /* Main container */
-    .main {
-        background-color: #f8f9fa;
-    }
-    
-    /* Card styling */
-    .card {
-        background: white;
-        border-radius: 10px;
-        padding: 20px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        margin-bottom: 20px;
-        border-left: 4px solid #4e54c8;
-    }
-    
-    /* Metric cards */
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 10px;
-        padding: 20px;
-        text-align: center;
-    }
-    
-    /* Status badges */
-    .status-safe {
-        background-color: #d4edda;
-        color: #155724;
-        padding: 5px 15px;
-        border-radius: 20px;
-        display: inline-block;
-        font-weight: bold;
-    }
-    
-    .status-warning {
-        background-color: #fff3cd;
-        color: #856404;
-        padding: 5px 15px;
-        border-radius: 20px;
-        display: inline-block;
-        font-weight: bold;
-    }
-    
-    .status-danger {
-        background-color: #f8d7da;
-        color: #721c24;
-        padding: 5px 15px;
-        border-radius: 20px;
-        display: inline-block;
-        font-weight: bold;
-    }
-    
-    /* Button styling */
-    .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        padding: 10px 24px;
-        border-radius: 25px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-    
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-    }
-    
-    /* Tab styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        background-color: #f1f3f4;
-        border-radius: 10px 10px 0px 0px;
-        padding: 10px 20px;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background-color: #4e54c8;
-        color: white;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# ============================================
-# KNOWLEDGE BASE SYSTEM
-# ============================================
-class AIKnowledgeBase:
-    def __init__(self):
-        self.categories = {
-            'USAGE_LEVEL': {
-                'VERY_LOW': {
-                    'label': 'Sangat Rendah',
-                    'level': 'AMAN',
-                    'icon': '✅',
-                    'color': '#28a745',
-                    'score': 1,
-                    'description': 'Penggunaan AI dalam batas normal',
-                    'actions': [
-                        'Tidak diperlukan tindakan khusus',
-                        'Pertahankan pola penggunaan saat ini',
-                        'AI digunakan secara optimal sebagai alat bantu'
-                    ],
-                    'recommendations': [
-                        'Lanjutkan penggunaan AI yang sehat',
-                        'Eksplorasi tools AI untuk efisiensi',
-                        'Bagikan pengalaman positif dengan teman'
-                    ]
-                },
-                'LOW': {
-                    'label': 'Rendah',
-                    'level': 'AMAN',
-                    'icon': '🟢',
-                    'color': '#20c997',
-                    'score': 2,
-                    'description': 'Penggunaan AI masih wajar',
-                    'actions': [
-                        'Monitoring rutin',
-                        'Edukasi penggunaan optimal',
-                        'Evaluasi berkala'
-                    ],
-                    'recommendations': [
-                        'Tetap waspada terhadap peningkatan ketergantungan',
-                        'Gunakan AI untuk tugas kompleks',
-                        'Jaga keseimbangan antara teknologi dan kemampuan manusia'
-                    ]
-                },
-                'MEDIUM': {
-                    'label': 'Sedang',
-                    'level': 'PERHATIAN',
-                    'icon': '🟡',
-                    'color': '#ffc107',
-                    'score': 3,
-                    'description': 'Perlu evaluasi penggunaan AI',
-                    'actions': [
-                        'Konsultasi dengan dosen',
-                        'Pembatasan penggunaan',
-                        'Workshop pengurangan ketergantungan'
-                    ],
-                    'recommendations': [
-                        'Batasi penggunaan AI pada tugas tertentu',
-                        'Kembangkan kemampuan problem-solving mandiri',
-                        'Ikuti workshop keterampilan belajar'
-                    ]
-                },
-                'HIGH': {
-                    'label': 'Tinggi',
-                    'level': 'WASPADA',
-                    'icon': '🟠',
-                    'color': '#fd7e14',
-                    'score': 4,
-                    'description': 'Butuh pembatasan penggunaan AI',
-                    'actions': [
-                        'Program pembatasan AI',
-                        'Konsultasi akademik intensif',
-                        'Monitoring harian'
-                    ],
-                    'recommendations': [
-                        'Kurangi penggunaan AI secara bertahap',
-                        'Fokus pada pengembangan kemampuan analitis',
-                        'Cari alternatif metode belajar'
-                    ]
-                },
-                'VERY_HIGH': {
-                    'label': 'Sangat Tinggi',
-                    'level': 'KRITIS',
-                    'icon': '🔴',
-                    'color': '#dc3545',
-                    'score': 5,
-                    'description': 'Diperlukan intervensi segera',
-                    'actions': [
-                        'Intervensi langsung oleh pembimbing',
-                        'Program rehabilitasi khusus',
-                        'Monitoring ketat'
-                    ],
-                    'recommendations': [
-                        'Hentikan penggunaan AI untuk tugas akademik',
-                        'Ikuti program khusus pengurangan ketergantungan',
-                        'Konsultasi dengan psikolog pendidikan'
-                    ]
-                }
-            },
-            'IMPACT_TYPES': {
-                'POSITIVE': {
-                    'icon': '📈',
-                    'description': 'AI meningkatkan performa akademik',
-                    'guidance': 'Pertahankan dengan pengawasan'
-                },
-                'NEUTRAL': {
-                    'icon': '➖',
-                    'description': 'AI tidak berpengaruh signifikan',
-                    'guidance': 'Evaluasi manfaat penggunaan'
-                },
-                'NEGATIVE': {
-                    'icon': '📉',
-                    'description': 'AI menurunkan kemampuan mandiri',
-                    'guidance': 'Kurangi penggunaan segera'
-                }
-            }
-        }
-    
-    def get_category_info(self, category_key):
-        """Mendapatkan informasi kategori"""
-        return self.categories['USAGE_LEVEL'].get(category_key, {})
-    
-    def get_all_categories(self):
-        """Mendapatkan semua kategori"""
-        return list(self.categories['USAGE_LEVEL'].keys())
-    
-    def get_recommendation_summary(self, category_key):
-        """Ringkasan rekomendasi untuk kategori tertentu"""
-        info = self.get_category_info(category_key)
-        if not info:
-            return ""
-        
-        return f"""
-        ### {info['icon']} {info['label']} - Level: {info['level']}
-        
-        **Deskripsi:** {info['description']}
-        
-        **Skor Risiko:** {info['score']}/5
-        
-        **Tindakan yang Disarankan:**
-        {chr(10).join(['• ' + action for action in info['actions']])}
-        
-        **Rekomendasi untuk Mahasiswa:**
-        {chr(10).join(['• ' + rec for rec in info['recommendations']])}
-        """
-
-# ============================================
-# KOMPONEN UI
-# ============================================
-def create_metric_card(title, value, change=None, icon="📊"):
-    """Membuat kartu metrik"""
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        st.markdown(f"<h1 style='font-size: 2.5rem; margin: 0;'>{icon}</h1>", unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"<h3 style='margin: 0; color: #666;'>{title}</h3>", unsafe_allow_html=True)
-        st.markdown(f"<h1 style='margin: 0;'>{value}</h1>", unsafe_allow_html=True)
-        if change:
-            st.markdown(f"<p style='margin: 0; color: #28a745;'>{change}</p>", unsafe_allow_html=True)
-
-def create_status_badge(level, text):
-    """Membuat badge status"""
-    if level == 'AMAN':
-        badge_class = "status-safe"
-    elif level == 'PERHATIAN':
-        badge_class = "status-warning"
-    else:
-        badge_class = "status-danger"
-    
-    return f'<span class="{badge_class}">{text}</span>'
-
-def create_progress_chart(labels, values, colors):
-    """Membuat chart progress"""
-    fig = go.Figure(data=[
-        go.Bar(
-            x=labels,
-            y=values,
-            marker_color=colors,
-            text=values,
-            textposition='auto',
-        )
-    ])
-    
-    fig.update_layout(
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        height=300,
-        margin=dict(l=0, r=0, t=0, b=0),
-        xaxis=dict(showgrid=False),
-        yaxis=dict(showgrid=False, range=[0, max(values)*1.1])
-    )
-    
-    return fig
-
-# ============================================
-# FUNGSI UTILITAS
-# ============================================
-@st.cache_data
-def load_sample_data():
-    """Memuat data contoh"""
+# Fungsi untuk membuat dataset contoh dengan variasi data
+def create_sample_dataset():
     np.random.seed(42)
-    n_samples = 150
+    
+    # Buat data dengan pola yang lebih realistis
+    n_samples = 200
     
     data = {
-        'ID': [f'STD{i:03d}' for i in range(1, n_samples+1)],
-        'Nama': [f'Mahasiswa_{i}' for i in range(1, n_samples+1)],
-        'Fakultas': np.random.choice(['Teknik', 'Sains', 'Ekonomi', 'Kedokteran', 'Hukum'], n_samples),
-        'IPK': np.round(np.random.normal(3.2, 0.5, n_samples), 2),
-        'Jam_Belajar': np.random.randint(10, 50, n_samples),
-        'Penggunaan_AI_Jam': np.random.randint(0, 40, n_samples),
-        'Frekuensi_AI': np.random.choice(['Sangat Rendah', 'Rendah', 'Sedang', 'Tinggi', 'Sangat Tinggi'], n_samples, p=[0.1, 0.2, 0.4, 0.2, 0.1]),
-        'Ketergantungan': np.random.choice(['Rendah', 'Sedang', 'Tinggi'], n_samples),
-        'Nilai_Rata': np.random.randint(60, 100, n_samples),
-        'Status': np.random.choice(['Aktif', 'Lulus', 'Cuti'], n_samples, p=[0.85, 0.1, 0.05])
+        'NIM': [f'202300{i:03d}' for i in range(1, n_samples + 1)],
+        'Nama': [f'Mahasiswa_{i}' for i in range(1, n_samples + 1)],
+        'Usia': np.random.randint(18, 25, n_samples),
+        'Jenis_Kelamin': np.random.choice(['Laki-laki', 'Perempuan'], n_samples, p=[0.55, 0.45]),
+        'Fakultas': np.random.choice(['Teknik', 'Sains', 'Ekonomi', 'Kedokteran', 'Hukum', 'Psikologi', 'Seni'], n_samples),
+        'Semester': np.random.randint(1, 9, n_samples),
+        'IPK': np.round(np.clip(np.random.normal(3.2, 0.5, n_samples), 2.0, 4.0), 2),
+        'Jam_Belajar_Mingguan': np.random.randint(5, 50, n_samples),
+        'Frekuensi_Penggunaan_AI': np.random.choice(['Sangat Rendah', 'Rendah', 'Sedang', 'Tinggi', 'Sangat Tinggi'], n_samples, p=[0.1, 0.2, 0.4, 0.2, 0.1]),
+        'Tujuan_Penggunaan_AI': np.random.choice(['Mengerjakan Tugas', 'Penelitian', 'Belajar Mandiri', 'Proyek Akhir', 'Ujian'], n_samples),
+        'Tingkat_Ketergantungan_AI': np.random.choice(['Sangat Rendah', 'Rendah', 'Sedang', 'Tinggi', 'Sangat Tinggi'], n_samples),
+        'Durasi_Penggunaan_AI_Jam': np.round(np.random.exponential(10, n_samples), 1),
+        'Nilai_UTS': np.random.randint(50, 100, n_samples),
+        'Nilai_UAS': np.random.randint(50, 100, n_samples),
+        'Jumlah_Tugas_Tepat_Waktu': np.random.randint(0, 15, n_samples),
+        'Status': np.random.choice(['Aktif', 'Cuti', 'Lulus'], n_samples, p=[0.85, 0.1, 0.05])
     }
     
     df = pd.DataFrame(data)
+    
+    # Tambahkan beberapa missing values untuk simulasi
+    cols_with_nan = ['IPK', 'Jam_Belajar_Mingguan', 'Durasi_Penggunaan_AI_Jam']
+    for col in cols_with_nan:
+        idx = np.random.choice(df.index, size=int(n_samples*0.05), replace=False)
+        df.loc[idx, col] = np.nan
+    
+    # Tambahkan outliers
+    outlier_idx = np.random.choice(df.index, size=int(n_samples*0.03), replace=False)
+    df.loc[outlier_idx, 'Jam_Belajar_Mingguan'] = np.random.randint(60, 100, len(outlier_idx))
+    
+    # Tambahkan data duplikat untuk contoh
+    duplicate_idx = np.random.choice(df.index, size=int(n_samples*0.02), replace=False)
+    for idx in duplicate_idx[:len(duplicate_idx)//2]:
+        df = pd.concat([df, df.loc[[idx]]], ignore_index=True)
+    
     return df
 
-def preprocess_data(df):
-    """Preprocessing data sederhana"""
-    df_clean = df.copy()
+# Fungsi untuk preprocessing data lengkap
+def comprehensive_preprocessing(df):
+    st.header("📊 Preprocessing Data Lengkap")
     
-    # Encoding
-    le = LabelEncoder()
-    df_clean['Frekuensi_AI_Encoded'] = le.fit_transform(df_clean['Frekuensi_AI'])
-    df_clean['Ketergantungan_Encoded'] = le.fit_transform(df_clean['Ketergantungan'])
+    # Tampilkan data awal
+    st.subheader("1. Data Awal")
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.write(f"**Shape Data:** {df.shape}")
+        st.write(f"**Jumlah Data:** {len(df)} baris, {len(df.columns)} kolom")
+    with col2:
+        st.write(f"**Tipe Data:**")
+        st.write(df.dtypes.value_counts())
     
-    return df_clean, le
-
-def train_ai_model(X_train, X_test, y_train, y_test):
-    """Training model AI"""
-    model = RandomForestClassifier(
-        n_estimators=100,
-        max_depth=10,
-        random_state=42
+    # Pilih kolom untuk preprocessing
+    st.subheader("2. Seleksi Kolom")
+    
+    all_columns = list(df.columns)
+    selected_columns = st.multiselect(
+        "Pilih kolom yang akan digunakan untuk analisis:",
+        all_columns,
+        default=[col for col in all_columns if col not in ['NIM', 'Nama', 'Status']]
     )
     
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
+    if not selected_columns:
+        st.warning("Silakan pilih minimal satu kolom!")
+        return None, None, None, None
     
-    return model, y_pred, accuracy
-
-# ============================================
-# HALAMAN LOGIN
-# ============================================
-def login_page():
-    """Halaman login"""
-    col1, col2 = st.columns([2, 1])
+    df_selected = df[selected_columns].copy()
     
-    with col1:
-        st.markdown("<h1 style='font-size: 3rem; color: #4e54c8;'>🧠 AI Academic Analyzer</h1>", unsafe_allow_html=True)
-        st.markdown("<h3 style='color: #666;'>Analisis Penggunaan AI terhadap Performa Akademik Mahasiswa</h3>", unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    color: white; 
-                    padding: 30px; 
-                    border-radius: 15px; 
-                    margin: 20px 0;'>
-            <h3>🏆 Fitur Utama</h3>
-            <p>• Analisis tingkat penggunaan AI mahasiswa</p>
-            <p>• Sistem rekomendasi berbasis knowledge base</p>
-            <p>• Dashboard monitoring real-time</p>
-            <p>• Laporan analisis otomatis</p>
-        </div>
-        """, unsafe_allow_html=True)
+    # Tampilkan data terpilih
+    with st.expander("Lihat Data Terpilih"):
+        st.dataframe(df_selected.head())
     
-    with col2:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 🔐 Login")
-        
-        role = st.radio(
-            "Masuk sebagai:",
-            ["🎓 Mahasiswa", "👨‍🏫 Dosen/Pengajar"],
-            horizontal=True
-        )
-        
-        if "Dosen" in role:
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            
-            if st.button("Login", use_container_width=True):
-                if username == "dosen" and password == "123":
-                    st.session_state.logged_in = True
-                    st.session_state.role = "dosen"
-                    st.rerun()
-                else:
-                    st.error("Username atau password salah")
-        else:
-            student_id = st.text_input("NIM/Nama")
-            if st.button("Masuk sebagai Mahasiswa", use_container_width=True):
-                if student_id:
-                    st.session_state.logged_in = True
-                    st.session_state.role = "mahasiswa"
-                    st.session_state.student_name = student_id
-                    st.rerun()
-        
-        st.markdown("---")
-        st.markdown("**Demo Credentials:**")
-        st.markdown("- Dosen: `dosen` / `123`")
-        st.markdown("- Mahasiswa: masukkan nama/NIM")
-        st.markdown("</div>", unsafe_allow_html=True)
-
-# ============================================
-# DASHBOARD DOSEN
-# ============================================
-def dosen_dashboard():
-    """Dashboard dosen"""
-    # Sidebar
-    with st.sidebar:
-        st.markdown("<h2>📊 Menu Dosen</h2>", unsafe_allow_html=True)
-        
-        menu_option = st.selectbox(
-            "Navigasi",
-            ["🏠 Dashboard Utama", "📁 Kelola Data", "🤖 Analisis AI", "📈 Visualisasi", "ℹ️ Knowledge Base", "⚙️ Pengaturan"]
-        )
-        
-        st.markdown("---")
-        st.markdown("### 📋 Quick Stats")
-        
-        if 'df' in st.session_state:
-            df = st.session_state.df
-            st.metric("Total Mahasiswa", len(df))
-            st.metric("Rata-rata IPK", f"{df['IPK'].mean():.2f}")
-            st.metric("Penggunaan AI", f"{df['Penggunaan_AI_Jam'].mean():.1f} jam/minggu")
-        
-        st.markdown("---")
-        if st.button("🚪 Logout", use_container_width=True):
-            st.session_state.logged_in = False
-            st.rerun()
+    # Data Cleaning
+    st.subheader("3. Data Cleaning")
     
-    # Main content
-    st.markdown(f"<h1>{menu_option.split(' ')[1]} Dosen</h1>", unsafe_allow_html=True)
-    
-    if menu_option == "🏠 Dashboard Utama":
-        show_dosen_dashboard()
-    elif menu_option == "📁 Kelola Data":
-        show_data_management()
-    elif menu_option == "🤖 Analisis AI":
-        show_ai_analysis()
-    elif menu_option == "📈 Visualisasi":
-        show_visualization()
-    elif menu_option == "ℹ️ Knowledge Base":
-        show_knowledge_base()
-    elif menu_option == "⚙️ Pengaturan":
-        show_settings()
-
-def show_dosen_dashboard():
-    """Dashboard utama dosen"""
-    col1, col2, col3, col4 = st.columns(4)
+    # Identifikasi masalah data
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        create_metric_card("Total Mahasiswa", "150", "+5%", "👨‍🎓")
+        missing_values = df_selected.isnull().sum()
+        missing_percentage = (missing_values / len(df_selected)) * 100
+        st.metric("Missing Values", f"{missing_values.sum()} ({missing_percentage.sum():.1f}%)")
+    
     with col2:
-        create_metric_card("Rata-rata IPK", "3.42", "+0.1", "📚")
+        duplicate_count = df_selected.duplicated().sum()
+        st.metric("Data Duplikat", f"{duplicate_count}")
+    
     with col3:
-        create_metric_card("Penggunaan AI", "18.5 jam", "-2%", "🤖")
-    with col4:
-        create_metric_card("Akurasi Model", "89%", "+3%", "🎯")
+        numeric_cols = df_selected.select_dtypes(include=[np.number]).columns
+        outlier_count = 0
+        if len(numeric_cols) > 0:
+            for col in numeric_cols:
+                Q1 = df_selected[col].quantile(0.25)
+                Q3 = df_selected[col].quantile(0.75)
+                IQR = Q3 - Q1
+                outliers = ((df_selected[col] < (Q1 - 1.5 * IQR)) | (df_selected[col] > (Q3 + 1.5 * IQR))).sum()
+                outlier_count += outliers
+        st.metric("Outliers", f"{outlier_count}")
     
-    # Quick actions
-    st.markdown("<h3>⚡ Quick Actions</h3>", unsafe_allow_html=True)
+    # Opsi cleaning
+    cleaning_options = st.multiselect(
+        "Pilih operasi cleaning yang akan dilakukan:",
+        ["Handle Missing Values", "Remove Duplicates", "Handle Outliers", "Normalize Text"]
+    )
     
-    col1, col2, col3, col4 = st.columns(4)
+    df_clean = df_selected.copy()
     
-    with col1:
-        if st.button("📥 Import Data", use_container_width=True):
-            st.session_state.show_import = True
-    with col2:
-        if st.button("🔍 Analisis Cepat", use_container_width=True):
-            st.session_state.quick_analysis = True
-    with col3:
-        if st.button("📊 Generate Report", use_container_width=True):
-            st.session_state.generate_report = True
-    with col4:
-        if st.button("👁️ Preview Data", use_container_width=True):
-            st.session_state.preview_data = True
-    
-    # Recent activities
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("### 📋 Aktivitas Terkini")
-    
-    activities = [
-        {"time": "10:30", "action": "Data mahasiswa diupdate", "user": "Admin"},
-        {"time": "09:15", "action": "Model AI ditraining ulang", "user": "System"},
-        {"time": "Yesterday", "action": "Laporan bulanan digenerate", "user": "Admin"},
-        {"time": "2 days ago", "action": "5 mahasiswa dikategorikan 'Waspada'", "user": "System"}
-    ]
-    
-    for act in activities:
-        col1, col2, col3 = st.columns([2, 3, 2])
-        with col1:
-            st.write(f"**{act['time']}**")
-        with col2:
-            st.write(act['action'])
-        with col3:
-            st.write(f"👤 {act['user']}")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-def show_data_management():
-    """Manajemen data"""
-    tab1, tab2, tab3 = st.tabs(["📥 Import Data", "🧹 Preprocessing", "📋 Preview Data"])
-    
-    with tab1:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 📥 Import Data Mahasiswa")
+    if "Handle Missing Values" in cleaning_options:
+        st.write("**Handle Missing Values:**")
+        missing_cols = missing_values[missing_values > 0].index.tolist()
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            upload_method = st.radio(
-                "Pilih metode import:",
-                ["📁 Upload File", "📝 Manual Input", "🔄 Gunakan Sample Data"]
-            )
-            
-            if upload_method == "📁 Upload File":
-                uploaded_file = st.file_uploader("Upload file CSV atau Excel", type=['csv', 'xlsx'])
-                if uploaded_file:
-                    if uploaded_file.name.endswith('.csv'):
-                        df = pd.read_csv(uploaded_file)
-                    else:
-                        df = pd.read_excel(uploaded_file)
-                    st.session_state.df = df
-                    st.success(f"✅ Data berhasil diimport: {len(df)} baris")
-            
-            elif upload_method == "🔄 Gunakan Sample Data":
-                if st.button("Load Sample Data", use_container_width=True):
-                    st.session_state.df = load_sample_data()
-                    st.success("✅ Sample data loaded!")
-        
-        with col2:
-            if 'df' in st.session_state:
-                st.metric("Total Data", len(st.session_state.df))
-                st.metric("Kolom", len(st.session_state.df.columns))
-                st.metric("Missing Values", st.session_state.df.isnull().sum().sum())
-        
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with tab2:
-        if 'df' not in st.session_state:
-            st.warning("Silakan import data terlebih dahulu")
-            return
-        
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 🧹 Data Preprocessing")
-        
-        df = st.session_state.df
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("#### Data Cleaning")
-            if st.button("🔍 Cek Missing Values", use_container_width=True):
-                missing = df.isnull().sum()
-                if missing.sum() > 0:
-                    st.warning(f"Ditemukan {missing.sum()} missing values")
-                    st.dataframe(missing[missing > 0])
-                else:
-                    st.success("✅ Tidak ada missing values")
-            
-            if st.button("🧼 Clean Data", use_container_width=True):
-                df_clean = df.dropna()
-                st.session_state.df = df_clean
-                st.success(f"✅ Data cleaned: {len(df_clean)} baris tersisa")
-        
-        with col2:
-            st.markdown("#### Encoding")
-            if st.button("🔢 Encode Categorical", use_container_width=True):
-                df_encoded, encoder = preprocess_data(df)
-                st.session_state.df_encoded = df_encoded
-                st.session_state.encoder = encoder
-                st.success("✅ Data berhasil di-encode")
-        
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with tab3:
-        if 'df' in st.session_state:
-            st.markdown("<div class='card'>", unsafe_allow_html=True)
-            st.markdown("### 📋 Preview Data")
-            
-            # Filter dan pencarian
-            col1, col2 = st.columns(2)
-            with col1:
-                search_term = st.text_input("🔍 Cari nama/NIM")
-            with col2:
-                rows_to_show = st.slider("Baris ditampilkan", 10, 100, 20)
-            
-            # Filter data
-            df_display = st.session_state.df
-            if search_term:
-                df_display = df_display[df_display.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(), axis=1)]
-            
-            st.dataframe(df_display.head(rows_to_show), use_container_width=True)
-            
-            # Statistik
-            if st.checkbox("Tampilkan Statistik"):
-                st.write(df_display.describe())
-            
-            st.markdown("</div>", unsafe_allow_html=True)
-
-def show_ai_analysis():
-    """Analisis AI"""
-    tab1, tab2, tab3 = st.tabs(["🎯 Training Model", "📊 Hasil Analisis", "💡 Rekomendasi"])
-    
-    with tab1:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 🎯 Training Model AI")
-        
-        if 'df' not in st.session_state:
-            st.warning("Silakan import data terlebih dahulu")
-            return
-        
-        # Parameter model
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("#### Parameter Model")
-            n_estimators = st.slider("Jumlah Tree", 10, 200, 100)
-            test_size = st.slider("Test Size (%)", 10, 40, 20)
-        
-        with col2:
-            st.markdown("#### Target Variable")
-            target_options = ['Frekuensi_AI', 'Ketergantungan', 'Nilai_Rata']
-            target = st.selectbox("Pilih target", target_options)
-            
-            st.markdown("#### Fitur")
-            feature_options = ['IPK', 'Jam_Belajar', 'Penggunaan_AI_Jam']
-            selected_features = st.multiselect("Pilih fitur", feature_options, default=feature_options)
-        
-        if st.button("🚀 Train Model", type="primary", use_container_width=True):
-            with st.spinner("Training model..."):
-                # Prepare data
-                df = st.session_state.df
-                if 'df_encoded' in st.session_state:
-                    df = st.session_state.df_encoded
-                    target_col = f"{target}_Encoded" if f"{target}_Encoded" in df.columns else target
-                else:
-                    target_col = target
-                
-                X = df[selected_features]
-                y = df[target_col]
-                
-                # Split data
-                X_train, X_test, y_train, y_test = train_test_split(
-                    X, y, test_size=test_size/100, random_state=42
+        if missing_cols:
+            for col in missing_cols:
+                col_type = df_clean[col].dtype
+                impute_method = st.selectbox(
+                    f"Metode imputasi untuk {col}:",
+                    ["Mean", "Median", "Mode", "Drop", "Custom Value"],
+                    key=f"impute_{col}"
                 )
                 
-                # Train model
-                model, y_pred, accuracy = train_ai_model(X_train, X_test, y_train, y_test)
+                if impute_method == "Mean":
+                    df_clean[col].fillna(df_clean[col].mean(), inplace=True)
+                elif impute_method == "Median":
+                    df_clean[col].fillna(df_clean[col].median(), inplace=True)
+                elif impute_method == "Mode":
+                    df_clean[col].fillna(df_clean[col].mode()[0], inplace=True)
+                elif impute_method == "Drop":
+                    df_clean = df_clean.dropna(subset=[col])
+                elif impute_method == "Custom Value":
+                    custom_val = st.text_input(f"Nilai custom untuk {col}:", value="0", key=f"custom_{col}")
+                    try:
+                        if col_type in [np.float64, np.int64]:
+                            df_clean[col].fillna(float(custom_val), inplace=True)
+                        else:
+                            df_clean[col].fillna(custom_val, inplace=True)
+                    except:
+                        df_clean[col].fillna(custom_val, inplace=True)
+        else:
+            st.write("Tidak ada missing values.")
+    
+    if "Remove Duplicates" in cleaning_options:
+        st.write("**Remove Duplicates:**")
+        before_len = len(df_clean)
+        df_clean = df_clean.drop_duplicates()
+        after_len = len(df_clean)
+        st.write(f"Dihapus {before_len - after_len} data duplikat.")
+    
+    if "Handle Outliers" in cleaning_options and len(numeric_cols) > 0:
+        st.write("**Handle Outliers:**")
+        outlier_method = st.selectbox(
+            "Metode handling outliers:",
+            ["IQR Method (Capping)", "Z-Score Method", "Remove Outliers", "Transformasi Log"]
+        )
+        
+        for col in numeric_cols:
+            if outlier_method == "IQR Method (Capping)":
+                Q1 = df_clean[col].quantile(0.25)
+                Q3 = df_clean[col].quantile(0.75)
+                IQR = Q3 - Q1
+                lower_bound = Q1 - 1.5 * IQR
+                upper_bound = Q3 + 1.5 * IQR
+                df_clean[col] = df_clean[col].clip(lower_bound, upper_bound)
                 
-                # Save results
+            elif outlier_method == "Z-Score Method":
+                from scipy import stats
+                z_scores = np.abs(stats.zscore(df_clean[col].dropna()))
+                threshold = 3
+                df_clean.loc[z_scores > threshold, col] = df_clean[col].mean()
+                
+            elif outlier_method == "Remove Outliers":
+                Q1 = df_clean[col].quantile(0.25)
+                Q3 = df_clean[col].quantile(0.75)
+                IQR = Q3 - Q1
+                df_clean = df_clean[~((df_clean[col] < (Q1 - 1.5 * IQR)) | (df_clean[col] > (Q3 + 1.5 * IQR)))]
+                
+            elif outlier_method == "Transformasi Log":
+                if (df_clean[col] > 0).all():
+                    df_clean[col] = np.log1p(df_clean[col])
+    
+    if "Normalize Text" in cleaning_options:
+        st.write("**Normalize Text:**")
+        text_cols = df_clean.select_dtypes(include=['object']).columns
+        for col in text_cols:
+            df_clean[col] = df_clean[col].str.strip().str.title()
+    
+    # Encoding Data Kategorikal
+    st.subheader("4. Encoding Data Kategorikal")
+    
+    categorical_cols = df_clean.select_dtypes(include=['object']).columns.tolist()
+    
+    if categorical_cols:
+        encoding_method = st.selectbox(
+            "Pilih metode encoding:",
+            ["Label Encoding", "One-Hot Encoding", "Target Encoding", "Frequency Encoding"]
+        )
+        
+        df_encoded = df_clean.copy()
+        encoders = {}
+        
+        if encoding_method == "Label Encoding":
+            for col in categorical_cols:
+                le = LabelEncoder()
+                df_encoded[col] = le.fit_transform(df_encoded[col].astype(str))
+                encoders[col] = le
+                
+        elif encoding_method == "One-Hot Encoding":
+            df_encoded = pd.get_dummies(df_encoded, columns=categorical_cols, prefix=categorical_cols)
+            
+        elif encoding_method == "Frequency Encoding":
+            for col in categorical_cols:
+                freq = df_encoded[col].value_counts() / len(df_encoded)
+                df_encoded[col] = df_encoded[col].map(freq)
+                encoders[col] = freq.to_dict()
+                
+        elif encoding_method == "Target Encoding":
+            st.warning("Target Encoding memerlukan target variable. Akan dilakukan setelah split data.")
+            df_encoded = df_clean.copy()
+    
+        st.write("**Data setelah Encoding:**")
+        st.dataframe(df_encoded.head())
+        
+        # Tampilkan informasi encoding
+        with st.expander("Lihat Detail Encoding"):
+            if encoding_method == "Label Encoding" and encoders:
+                for col, le in encoders.items():
+                    st.write(f"**{col}:**")
+                    for i, class_name in enumerate(le.classes_):
+                        st.write(f"  {class_name} → {i}")
+    else:
+        st.write("Tidak ada kolom kategorikal untuk di-encode.")
+        df_encoded = df_clean.copy()
+        encoders = {}
+    
+    # Feature Scaling
+    st.subheader("5. Feature Scaling")
+    
+    scaling_method = st.selectbox(
+        "Pilih metode scaling:",
+        ["Tidak ada Scaling", "StandardScaler", "MinMaxScaler", "RobustScaler"]
+    )
+    
+    df_scaled = df_encoded.copy()
+    
+    if scaling_method != "Tidak ada Scaling":
+        numeric_cols_for_scaling = df_scaled.select_dtypes(include=[np.number]).columns.tolist()
+        
+        if numeric_cols_for_scaling:
+            if scaling_method == "StandardScaler":
+                scaler = StandardScaler()
+                df_scaled[numeric_cols_for_scaling] = scaler.fit_transform(df_scaled[numeric_cols_for_scaling])
+                
+            elif scaling_method == "MinMaxScaler":
+                scaler = MinMaxScaler()
+                df_scaled[numeric_cols_for_scaling] = scaler.fit_transform(df_scaled[numeric_cols_for_scaling])
+                
+            elif scaling_method == "RobustScaler":
+                from sklearn.preprocessing import RobustScaler
+                scaler = RobustScaler()
+                df_scaled[numeric_cols_for_scaling] = scaler.fit_transform(df_scaled[numeric_cols_for_scaling])
+            
+            st.write("**Data setelah Scaling:**")
+            st.dataframe(df_scaled.head())
+        else:
+            st.write("Tidak ada kolom numerik untuk di-scaling.")
+    else:
+        scaler = None
+    
+    # Split Data
+    st.subheader("6. Split Data")
+    
+    # Pilih target variable
+    available_columns = df_scaled.columns.tolist()
+    
+    # Coba cari kolom target yang umum
+    target_candidates = ['Frekuensi_Penggunaan_AI', 'Tingkat_Ketergantungan_AI', 'IPK', 'Nilai_UAS']
+    target_default = None
+    for candidate in target_candidates:
+        if candidate in available_columns:
+            target_default = candidate
+            break
+    
+    if target_default is None and available_columns:
+        target_default = available_columns[-1]
+    
+    target = st.selectbox(
+        "Pilih target variable (variabel yang akan diprediksi):",
+        available_columns,
+        index=available_columns.index(target_default) if target_default in available_columns else 0
+    )
+    
+    # Pilih fitur
+    feature_options = [col for col in available_columns if col != target]
+    default_features = [col for col in ['Usia', 'IPK', 'Jam_Belajar_Mingguan'] if col in feature_options]
+    
+    selected_features = st.multiselect(
+        "Pilih fitur untuk model:",
+        feature_options,
+        default=default_features[:3] if default_features else feature_options[:3]
+    )
+    
+    if not selected_features:
+        st.error("Pilih minimal satu fitur!")
+        return None, None, None, None, None, None
+    
+    # Konfigurasi split
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        test_size = st.slider("Ukuran data testing (%):", 10, 50, 20) / 100
+    
+    with col2:
+        random_state = st.number_input("Random state:", min_value=0, max_value=100, value=42)
+        shuffle = st.checkbox("Shuffle data", value=True)
+    
+    # Split data
+    X = df_scaled[selected_features]
+    y = df_scaled[target]
+    
+    try:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, 
+            test_size=test_size, 
+            random_state=random_state, 
+            shuffle=shuffle,
+            stratify=y if len(y.unique()) < 10 else None
+        )
+        
+        st.success("✅ Data berhasil di-split!")
+        
+        # Tampilkan hasil split
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Data", len(df_scaled))
+        with col2:
+            st.metric("Training Data", len(X_train))
+        with col3:
+            st.metric("Testing Data", len(X_test))
+        with col4:
+            st.metric("Test Size", f"{test_size*100:.0f}%")
+        
+        # Visualisasi distribusi target
+        fig = make_subplots(rows=1, cols=2, subplot_titles=('Distribusi Target (Training)', 'Distribusi Target (Testing)'))
+        
+        y_train_counts = pd.Series(y_train).value_counts()
+        fig.add_trace(
+            go.Bar(x=y_train_counts.index.astype(str), y=y_train_counts.values, name='Training'),
+            row=1, col=1
+        )
+        
+        y_test_counts = pd.Series(y_test).value_counts()
+        fig.add_trace(
+            go.Bar(x=y_test_counts.index.astype(str), y=y_test_counts.values, name='Testing', marker_color='orange'),
+            row=1, col=2
+        )
+        
+        fig.update_layout(height=400, showlegend=True)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        return df_clean, df_scaled, X_train, X_test, y_train, y_test, target, selected_features, encoders
+        
+    except Exception as e:
+        st.error(f"Error saat split data: {e}")
+        return None, None, None, None, None, None, None, None, None
+
+# Fungsi untuk training model Random Forest
+def train_random_forest_model(X_train, X_test, y_train, y_test, target):
+    st.header("🌳 Model Random Forest")
+    
+    # Deteksi jenis masalah (klasifikasi atau regresi)
+    problem_type = st.selectbox(
+        "Tipe masalah:",
+        ["Auto Detect", "Klasifikasi", "Regresi"]
+    )
+    
+    if problem_type == "Auto Detect":
+        # Coba deteksi otomatis
+        if y_train.dtype == 'object' or len(y_train.unique()) < 10:
+            problem_type = "Klasifikasi"
+        else:
+            problem_type = "Regresi"
+    
+    st.write(f"**Tipe masalah terdeteksi:** {problem_type}")
+    
+    # Parameter model
+    st.subheader("Hyperparameter Tuning")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        n_estimators = st.slider("Jumlah estimator (n_estimators):", 10, 500, 100, 10)
+        max_depth = st.selectbox("Max depth:", ["None"] + list(range(5, 51, 5)), index=5)
+        max_depth = None if max_depth == "None" else int(max_depth)
+    
+    with col2:
+        min_samples_split = st.slider("Min samples split:", 2, 20, 2, 1)
+        min_samples_leaf = st.slider("Min samples leaf:", 1, 10, 1, 1)
+    
+    with col3:
+        max_features = st.selectbox("Max features:", ["auto", "sqrt", "log2", "None"], index=0)
+        max_features = None if max_features == "None" else max_features
+        bootstrap = st.checkbox("Bootstrap", value=True)
+    
+    # Opsi cross-validation
+    use_cv = st.checkbox("Gunakan Cross-Validation", value=True)
+    
+    if use_cv:
+        cv_folds = st.slider("Jumlah fold CV:", 3, 10, 5)
+    
+    # Training model
+    if st.button("🚀 Train Model", type="primary"):
+        try:
+            with st.spinner("Training model Random Forest..."):
+                # Inisialisasi model
+                if problem_type == "Klasifikasi":
+                    model = RandomForestClassifier(
+                        n_estimators=n_estimators,
+                        max_depth=max_depth,
+                        min_samples_split=min_samples_split,
+                        min_samples_leaf=min_samples_leaf,
+                        max_features=max_features,
+                        bootstrap=bootstrap,
+                        random_state=42,
+                        n_jobs=-1
+                    )
+                else:  # Regresi
+                    model = RandomForestRegressor(
+                        n_estimators=n_estimators,
+                        max_depth=max_depth,
+                        min_samples_split=min_samples_split,
+                        min_samples_leaf=min_samples_leaf,
+                        max_features=max_features,
+                        bootstrap=bootstrap,
+                        random_state=42,
+                        n_jobs=-1
+                    )
+                
+                # Training
+                model.fit(X_train, y_train)
+                
+                # Prediksi
+                y_pred = model.predict(X_test)
+                y_pred_train = model.predict(X_train)
+                
+                # Evaluasi model
+                st.subheader("📈 Hasil Evaluasi Model")
+                
+                # Metrik evaluasi
+                if problem_type == "Klasifikasi":
+                    # Hitung berbagai metrik
+                    accuracy_test = accuracy_score(y_test, y_pred)
+                    accuracy_train = accuracy_score(y_train, y_pred_train)
+                    precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
+                    recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
+                    f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
+                    
+                    # Tampilkan metrik
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Accuracy Training", f"{accuracy_train:.2%}")
+                    with col2:
+                        st.metric("Accuracy Testing", f"{accuracy_test:.2%}")
+                    with col3:
+                        st.metric("Precision", f"{precision:.2%}")
+                    with col4:
+                        st.metric("Recall", f"{recall:.2%}")
+                    
+                    # Classification report
+                    st.subheader("Classification Report")
+                    report = classification_report(y_test, y_pred, output_dict=True)
+                    report_df = pd.DataFrame(report).transpose()
+                    st.dataframe(report_df.style.format("{:.2f}"))
+                    
+                    # Confusion matrix
+                    st.subheader("Confusion Matrix")
+                    cm = confusion_matrix(y_test, y_pred)
+                    
+                    fig = px.imshow(
+                        cm,
+                        labels=dict(x="Predicted", y="Actual", color="Count"),
+                        x=[str(i) for i in np.unique(y_test)],
+                        y=[str(i) for i in np.unique(y_test)],
+                        color_continuous_scale='Blues'
+                    )
+                    fig.update_layout(width=600, height=500)
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                else:  # Regresi
+                    # Hitung metrik regresi
+                    mse_test = mean_squared_error(y_test, y_pred)
+                    mse_train = mean_squared_error(y_train, y_pred_train)
+                    rmse_test = np.sqrt(mse_test)
+                    rmse_train = np.sqrt(mse_train)
+                    mae_test = mean_absolute_error(y_test, y_pred)
+                    mae_train = mean_absolute_error(y_train, y_pred_train)
+                    r2_test = r2_score(y_test, y_pred)
+                    r2_train = r2_score(y_train, y_pred_train)
+                    
+                    # Tampilkan metrik
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("RMSE Testing", f"{rmse_test:.4f}")
+                        st.metric("RMSE Training", f"{rmse_train:.4f}")
+                    with col2:
+                        st.metric("MAE Testing", f"{mae_test:.4f}")
+                        st.metric("MAE Training", f"{mae_train:.4f}")
+                    with col3:
+                        st.metric("R² Testing", f"{r2_test:.4f}")
+                        st.metric("R² Training", f"{r2_train:.4f}")
+                    
+                    # Scatter plot actual vs predicted
+                    st.subheader("Actual vs Predicted")
+                    
+                    fig = go.Figure()
+                    
+                    fig.add_trace(go.Scatter(
+                        x=y_test, y=y_pred,
+                        mode='markers',
+                        name='Testing Data',
+                        marker=dict(color='blue', size=8, opacity=0.6)
+                    ))
+                    
+                    # Tambahkan garis diagonal
+                    min_val = min(y_test.min(), y_pred.min())
+                    max_val = max(y_test.max(), y_pred.max())
+                    fig.add_trace(go.Scatter(
+                        x=[min_val, max_val], y=[min_val, max_val],
+                        mode='lines',
+                        name='Ideal Fit',
+                        line=dict(color='red', dash='dash')
+                    ))
+                    
+                    fig.update_layout(
+                        xaxis_title='Actual Values',
+                        yaxis_title='Predicted Values',
+                        width=700, height=500
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                # Cross-validation jika dipilih
+                if use_cv:
+                    st.subheader("📊 Cross-Validation Results")
+                    
+                    if problem_type == "Klasifikasi":
+                        cv_scores = cross_val_score(model, X_train, y_train, cv=cv_folds, scoring='accuracy')
+                        cv_metric = "Accuracy"
+                    else:
+                        cv_scores = cross_val_score(model, X_train, y_train, cv=cv_folds, scoring='r2')
+                        cv_metric = "R² Score"
+                    
+                    cv_df = pd.DataFrame({
+                        'Fold': range(1, cv_folds + 1),
+                        cv_metric: cv_scores
+                    })
+                    
+                    col1, col2 = st.columns([2, 1])
+                    
+                    with col1:
+                        fig = px.line(cv_df, x='Fold', y=cv_metric, markers=True,
+                                     title=f'Cross-Validation Scores (Mean: {cv_scores.mean():.4f})')
+                        fig.update_layout(height=400)
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    with col2:
+                        st.write("**CV Statistics:**")
+                        st.write(f"Mean: {cv_scores.mean():.4f}")
+                        st.write(f"Std: {cv_scores.std():.4f}")
+                        st.write(f"Min: {cv_scores.min():.4f}")
+                        st.write(f"Max: {cv_scores.max():.4f}")
+                
+                # Feature importance
+                st.subheader("🔍 Feature Importance")
+                
+                feature_importance = pd.DataFrame({
+                    'Feature': X_train.columns,
+                    'Importance': model.feature_importances_
+                }).sort_values('Importance', ascending=False)
+                
+                col1, col2 = st.columns([2, 1])
+                
+                with col1:
+                    fig = px.bar(feature_importance, x='Importance', y='Feature', orientation='h',
+                                color='Importance', color_continuous_scale='viridis')
+                    fig.update_layout(height=500, yaxis={'categoryorder': 'total ascending'})
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    st.write("**Top 5 Features:**")
+                    for idx, row in feature_importance.head().iterrows():
+                        st.write(f"{row['Feature']}: {row['Importance']:.4f}")
+                
+                # Simpan model
+                model_bytes = joblib.dump(model, 'random_forest_model.pkl')
                 st.session_state.model = model
                 st.session_state.y_pred = y_pred
                 st.session_state.y_test = y_test
-                st.session_state.accuracy = accuracy
-                st.session_state.X_test = X_test
+                st.session_state.problem_type = problem_type
+                st.session_state.feature_importance = feature_importance
                 
-                st.success(f"✅ Model trained successfully! Accuracy: {accuracy:.2%}")
-        
-        st.markdown("</div>", unsafe_allow_html=True)
+                st.success("✅ Model berhasil ditraining dan disimpan!")
+                
+                return model, y_pred
+                
+        except Exception as e:
+            st.error(f"Error dalam training model: {str(e)}")
+            return None, None
     
-    with tab2:
-        if 'model' not in st.session_state:
-            st.warning("Silakan train model terlebih dahulu")
-            return
-        
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 📊 Hasil Analisis")
-        
-        # Metrics
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Accuracy", f"{st.session_state.accuracy:.2%}")
-        with col2:
-            st.metric("Total Predictions", len(st.session_state.y_pred))
-        with col3:
-            unique_preds = len(np.unique(st.session_state.y_pred))
-            st.metric("Unique Categories", unique_preds)
-        
-        # Classification report
-        st.markdown("#### 📋 Classification Report")
-        report = classification_report(st.session_state.y_test, st.session_state.y_pred, output_dict=True)
-        report_df = pd.DataFrame(report).transpose()
-        st.dataframe(report_df.style.format("{:.2f}"))
-        
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with tab3:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 💡 Rekomendasi Otomatis")
-        
-        kb = AIKnowledgeBase()
-        
-        # Distribution analysis
-        pred_counts = pd.Series(st.session_state.y_pred).value_counts().sort_index()
-        
-        # Map numeric predictions to categories
-        category_map = {
-            0: 'VERY_LOW',
-            1: 'LOW',
-            2: 'MEDIUM',
-            3: 'HIGH',
-            4: 'VERY_HIGH'
-        }
-        
-        # Display recommendations for each category
-        for pred_val, count in pred_counts.items():
-            category_key = category_map.get(pred_val, 'MEDIUM')
-            category_info = kb.get_category_info(category_key)
-            
-            if category_info:
-                col1, col2 = st.columns([1, 3])
-                
-                with col1:
-                    st.markdown(f"<h1 style='color: {category_info['color']}; text-align: center;'>{category_info['icon']}</h1>", 
-                                unsafe_allow_html=True)
-                    st.markdown(f"<h3 style='text-align: center;'>{count} mahasiswa</h3>", unsafe_allow_html=True)
-                
-                with col2:
-                    st.markdown(f"**{category_info['label']}** - Level: {category_info['level']}")
-                    st.markdown(f"*{category_info['description']}*")
-                    
-                    with st.expander("Lihat detail rekomendasi"):
-                        st.markdown("**Tindakan:**")
-                        for action in category_info['actions']:
-                            st.write(f"• {action}")
-                        
-                        st.markdown("**Rekomendasi:**")
-                        for rec in category_info['recommendations']:
-                            st.write(f"• {rec}")
-                
-                st.markdown("---")
-        
-        st.markdown("</div>", unsafe_allow_html=True)
+    return None, None
 
-def show_visualization():
-    """Visualisasi data"""
-    if 'df' not in st.session_state:
-        st.warning("Silakan import data terlebih dahulu")
+# Fungsi untuk evaluasi dan rekomendasi
+def evaluation_and_recommendations(df_clean, target, predictions=None):
+    st.header("📋 Evaluasi dan Rekomendasi")
+    
+    if 'model' not in st.session_state:
+        st.warning("Silakan train model terlebih dahulu di menu 'Model Random Forest'")
         return
     
-    df = st.session_state.df
+    # Analisis hasil
+    st.subheader("1. Analisis Hasil Prediksi")
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 📊 Distribusi Penggunaan AI")
+    # Tampilkan distribusi prediksi
+    if predictions is not None:
+        pred_series = pd.Series(predictions)
+        pred_counts = pred_series.value_counts().sort_index()
         
-        fig = px.histogram(df, x='Frekuensi_AI', 
-                         color='Frekuensi_AI',
-                         title='Distribusi Frekuensi Penggunaan AI',
-                         color_discrete_sequence=px.colors.qualitative.Set3)
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 📈 Hubungan AI vs IPK")
+        col1, col2 = st.columns([2, 1])
         
-        fig = px.scatter(df, x='Penggunaan_AI_Jam', y='IPK',
-                       color='Frekuensi_AI',
-                       size='Jam_Belajar',
-                       hover_data=['Nama'],
-                       title='Hubungan Penggunaan AI dengan IPK')
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 🏫 Analisis per Fakultas")
-        
-        faculty_stats = df.groupby('Fakultas').agg({
-            'IPK': 'mean',
-            'Penggunaan_AI_Jam': 'mean',
-            'Jam_Belajar': 'mean'
-        }).round(2)
-        
-        fig = go.Figure(data=[
-            go.Bar(name='Rata IPK', x=faculty_stats.index, y=faculty_stats['IPK']),
-            go.Bar(name='Penggunaan AI', x=faculty_stats.index, y=faculty_stats['Penggunaan_AI_Jam']/10)
-        ])
-        
-        fig.update_layout(barmode='group')
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 🔍 Heatmap Korelasi")
-        
-        numeric_cols = df.select_dtypes(include=[np.number]).columns
-        if len(numeric_cols) > 1:
-            corr_matrix = df[numeric_cols].corr()
-            
-            fig = px.imshow(corr_matrix,
-                          labels=dict(color="Korelasi"),
-                          x=corr_matrix.columns,
-                          y=corr_matrix.columns,
-                          color_continuous_scale='RdBu')
+        with col1:
+            fig = px.pie(values=pred_counts.values, names=pred_counts.index.astype(str),
+                        title='Distribusi Prediksi')
             st.plotly_chart(fig, use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-def show_knowledge_base():
-    """Knowledge Base System"""
-    kb = AIKnowledgeBase()
-    
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("### ℹ️ Knowledge Base System")
-    st.markdown("Sistem pengetahuan untuk klasifikasi dan rekomendasi otomatis")
-    
-    # Tampilkan semua kategori
-    for category_key in kb.get_all_categories():
-        category_info = kb.get_category_info(category_key)
         
+        with col2:
+            st.write("**Statistik Prediksi:**")
+            st.write(f"Total: {len(predictions)}")
+            st.write(f"Unique: {len(pred_counts)}")
+    
+    # Sistem rekomendasi berbasis knowledge
+    st.subheader("2. Sistem Rekomendasi Berbasis Knowledge")
+    
+    # Knowledge base untuk rekomendasi
+    knowledge_base = {
+        'Frekuensi_Penggunaan_AI': {
+            'Sangat Rendah': {
+                'level': 'Aman',
+                'kategori': 'Rendah',
+                'rekomendasi': [
+                    'Penggunaan AI masih sangat rendah dan dalam batas wajar',
+                    'Pertahankan penggunaan AI sebagai alat bantu, bukan ketergantungan',
+                    'Eksplorasi potensi AI untuk meningkatkan produktivitas akademik'
+                ],
+                'tindakan': 'Monitoring berkala'
+            },
+            'Rendah': {
+                'level': 'Aman',
+                'kategori': 'Rendah',
+                'rekomendasi': [
+                    'Penggunaan AI masih rendah dan terkendali',
+                    'Pertahankan keseimbangan antara penggunaan AI dan kemampuan mandiri',
+                    'Manfaatkan AI untuk tugas-tugas kompleks'
+                ],
+                'tindakan': 'Edukasi penggunaan optimal'
+            },
+            'Sedang': {
+                'level': 'Perhatian',
+                'kategori': 'Sedang',
+                'rekomendasi': [
+                    'Penggunaan AI mulai sering, perlu evaluasi',
+                    'Pastikan tidak terjadi ketergantungan berlebihan',
+                    'Kembangkan kemampuan analisis tanpa bantuan AI'
+                ],
+                'tindakan': 'Konsultasi dengan pembimbing'
+            },
+            'Tinggi': {
+                'level': 'Waspada',
+                'kategori': 'Tinggi',
+                'rekomendasi': [
+                    'Penggunaan AI sudah tinggi, perlu pembatasan',
+                    'Evaluasi dampak terhadap kemampuan kritis mahasiswa',
+                    'Implementasi kuota penggunaan AI'
+                ],
+                'tindakan': 'Pembatasan dan monitoring ketat'
+            },
+            'Sangat Tinggi': {
+                'level': 'Kritis',
+                'kategori': 'Sangat Tinggi',
+                'rekomendasi': [
+                    'Penggunaan AI sangat tinggi, butuh intervensi segera',
+                    'Konsultasi dengan ahli pendidikan dan teknologi',
+                    'Program rehabilitasi pengurangan ketergantungan AI'
+                ],
+                'tindakan': 'Intervensi intensif'
+            }
+        },
+        'Tingkat_Ketergantungan_AI': {
+            'Sangat Rendah': {
+                'level': 'Sangat Baik',
+                'rekomendasi': 'Pertahankan kemandirian belajar'
+            },
+            'Rendah': {
+                'level': 'Baik',
+                'rekomendasi': 'Manfaatkan AI sebagai pendukung, bukan ketergantungan'
+            },
+            'Sedang': {
+                'level': 'Cukup',
+                'rekomendasi': 'Kurangi ketergantungan secara bertahap'
+            },
+            'Tinggi': {
+                'level': 'Kurang',
+                'rekomendasi': 'Butuh program pengurangan ketergantungan'
+            },
+            'Sangat Tinggi': {
+                'level': 'Buruk',
+                'rekomendasi': 'Intervensi segera oleh pembimbing akademik'
+            }
+        }
+    }
+    
+    # Pilih variabel untuk rekomendasi
+    recommendation_target = st.selectbox(
+        "Pilih variabel untuk rekomendasi:",
+        ['Frekuensi_Penggunaan_AI', 'Tingkat_Ketergantungan_AI', 'IPK']
+    )
+    
+    if recommendation_target in df_clean.columns:
+        # Analisis distribusi
+        value_counts = df_clean[recommendation_target].value_counts()
+        
+        st.write(f"**Distribusi {recommendation_target}:**")
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            fig = px.bar(x=value_counts.index.astype(str), y=value_counts.values,
+                        title=f'Distribusi {recommendation_target}')
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            st.write("**Statistik:**")
+            for value, count in value_counts.items():
+                percentage = (count / len(df_clean)) * 100
+                st.write(f"{value}: {count} ({percentage:.1f}%)")
+        
+        # Generate rekomendasi
+        if recommendation_target in knowledge_base:
+            st.subheader("3. Rekomendasi Berdasarkan Tingkat")
+            
+            for level, data in knowledge_base[recommendation_target].items():
+                if level in value_counts.index:
+                    count = value_counts[level]
+                    percentage = (count / len(df_clean)) * 100
+                    
+                    with st.expander(f"📊 {level} ({count} mahasiswa, {percentage:.1f}%)"):
+                        st.write(f"**Level:** {data['level']}")
+                        st.write(f"**Kategori:** {data.get('kategori', 'N/A')}")
+                        
+                        if 'rekomendasi' in data:
+                            if isinstance(data['rekomendasi'], list):
+                                st.write("**Rekomendasi:**")
+                                for rec in data['rekomendasi']:
+                                    st.write(f"• {rec}")
+                            else:
+                                st.write(f"**Rekomendasi:** {data['rekomendasi']}")
+                        
+                        if 'tindakan' in data:
+                            st.write(f"**Tindakan:** {data['tindakan']}")
+        
+        # Rekomendasi umum
+        st.subheader("4. Rekomendasi Umum untuk Institusi")
+        
+        recommendations = [
+            "1. **Implementasi Kebijakan AI**: Buat panduan penggunaan AI yang jelas untuk mahasiswa",
+            "2. **Monitoring Berkala**: Lakukan pemantauan penggunaan AI melalui survei regular",
+            "3. **Edukasi dan Pelatihan**: Berikan pelatihan penggunaan AI yang bertanggung jawab",
+            "4. **Sistem Pendukung**: Sediakan konseling untuk mahasiswa dengan ketergantungan AI tinggi",
+            "5. **Integrasi Kurikulum**: Masukkan etika penggunaan AI dalam kurikulum",
+            "6. **Kolaborasi dengan Ahli**: Bekerjasama dengan ahli AI dan pendidikan",
+            "7. **Penelitian Lanjutan**: Lakukan penelitian dampak AI terhadap pendidikan secara berkala"
+        ]
+        
+        for rec in recommendations:
+            st.write(rec)
+    
+    # Download hasil analisis
+    st.subheader("5. Export Hasil Analisis")
+    
+    if st.button("📥 Download Report Analisis"):
+        # Buat report sederhana
+        report_data = {
+            'Total Mahasiswa': len(df_clean),
+            'Variabel Target': target,
+            'Model Used': 'Random Forest',
+            'Timestamp': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        
+        report_df = pd.DataFrame([report_data])
+        
+        # Konversi ke CSV
+        csv = report_df.to_csv(index=False)
+        
+        st.download_button(
+            label="Download Report (CSV)",
+            data=csv,
+            file_name="ai_analysis_report.csv",
+            mime="text/csv"
+        )
+
+# Halaman Login
+def login_page():
+    st.title("🎓 Sistem Analisis Penggunaan AI - Performa Akademik")
+    st.markdown("---")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.image("https://cdn.pixabay.com/photo/2020/05/18/16/17/social-media-5187243_1280.png", use_column_width=True)
+    
+    st.markdown("### Login ke Sistem")
+    
+    login_type = st.radio("Login sebagai:", ["Guru/Admin", "Mahasiswa"])
+    
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    
+    if st.button("Login", type="primary"):
+        if login_type == "Guru/Admin":
+            if username == "guru" and password == "guru123":
+                st.session_state.logged_in = True
+                st.session_state.user_type = "guru"
+                st.success("✅ Login berhasil! Mengarahkan ke dashboard...")
+                st.rerun()
+            else:
+                st.error("❌ Username atau password salah untuk akun guru!")
+        else:  # Mahasiswa
+            if username and password == "mahasiswa123":
+                st.session_state.logged_in = True
+                st.session_state.user_type = "mahasiswa"
+                st.session_state.student_name = username
+                st.success(f"✅ Login berhasil! Selamat datang {username}")
+                st.rerun()
+            else:
+                st.error("❌ Password harus 'mahasiswa123' untuk akun mahasiswa!")
+    
+    # Info login
+    st.info("""
+    **Credential Login:**
+    - 👨‍🏫 **Guru/Admin**: Username: `guru`, Password: `guru123`
+    - 👨‍🎓 **Mahasiswa**: Username: `Nama Anda`, Password: `mahasiswa123`
+    
+    **Catatan:** Aplikasi ini menggunakan dataset contoh untuk demonstrasi.
+    """)
+
+# Dashboard Guru
+def guru_dashboard():
+    st.sidebar.title("👨‍🏫 Dashboard Guru/Admin")
+    st.sidebar.markdown("---")
+    
+    menu = st.sidebar.radio(
+        "Menu Navigasi",
+        ["📊 Data Awal", "🔧 Preprocessing Data", "🌳 Model Random Forest", 
+         "📋 Evaluasi & Rekomendasi", "📈 Dashboard Analisis", "🚪 Logout"]
+    )
+    
+    if menu == "🚪 Logout":
+        st.session_state.logged_in = False
+        st.session_state.user_type = None
+        st.rerun()
+    
+    st.title("📊 Dashboard Analisis - Guru/Admin")
+    st.markdown("---")
+    
+    # Inisialisasi session state
+    if 'df' not in st.session_state:
+        st.session_state.df = create_sample_dataset()
+    
+    if 'df_clean' not in st.session_state:
+        st.session_state.df_clean = None
+    
+    if 'df_processed' not in st.session_state:
+        st.session_state.df_processed = None
+    
+    if 'model' not in st.session_state:
+        st.session_state.model = None
+    
+    # Menu Data Awal
+    if menu == "📊 Data Awal":
+        st.header("📁 Data Awal Dataset")
+        
+        # Upload atau gunakan dataset contoh
+        st.subheader("Upload Dataset")
+        
+        uploaded_file = st.file_uploader("Upload file CSV dataset", type=['csv'])
+        
+        if uploaded_file is not None:
+            try:
+                st.session_state.df = pd.read_csv(uploaded_file)
+                st.success("✅ Dataset berhasil diupload!")
+            except Exception as e:
+                st.error(f"❌ Error membaca file: {e}")
+                st.info("Menggunakan dataset contoh sebagai fallback.")
+        else:
+            st.info("📋 Menggunakan dataset contoh. Silakan upload dataset CSV jika ingin menggunakan data sendiri.")
+        
+        # Tampilkan data
+        st.subheader("Preview Dataset")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Jumlah Data", len(st.session_state.df))
+        with col2:
+            st.metric("Jumlah Fitur", len(st.session_state.df.columns))
+        with col3:
+            st.metric("Memory Usage", f"{st.session_state.df.memory_usage().sum() / 1024:.1f} KB")
+        
+        # Tampilkan dataframe dengan tab
+        tab1, tab2, tab3 = st.tabs(["Data", "Info", "Statistik"])
+        
+        with tab1:
+            st.dataframe(st.session_state.df.head(20))
+        
+        with tab2:
+            # Info data
+            buffer = pd.io.common.StringIO()
+            st.session_state.df.info(buf=buffer)
+            info_str = buffer.getvalue()
+            st.text(info_str)
+        
+        with tab3:
+            # Statistik deskriptif
+            st.write(st.session_state.df.describe())
+        
+        # Visualisasi data awal
+        st.subheader("Visualisasi Data Awal")
+        
+        if st.checkbox("Tampilkan visualisasi"):
+            numeric_cols = st.session_state.df.select_dtypes(include=[np.number]).columns
+            
+            if len(numeric_cols) > 0:
+                selected_num_col = st.selectbox("Pilih kolom numerik:", numeric_cols)
+                
+                fig = px.histogram(st.session_state.df, x=selected_num_col, 
+                                 title=f'Distribusi {selected_num_col}')
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Korelasi heatmap
+            if len(numeric_cols) > 1:
+                st.subheader("Heatmap Korelasi")
+                corr_matrix = st.session_state.df[numeric_cols].corr()
+                
+                fig = px.imshow(corr_matrix, 
+                              labels=dict(color="Korelasi"),
+                              x=corr_matrix.columns,
+                              y=corr_matrix.columns,
+                              color_continuous_scale='RdBu')
+                fig.update_layout(width=800, height=600)
+                st.plotly_chart(fig, use_container_width=True)
+    
+    # Menu Preprocessing Data
+    elif menu == "🔧 Preprocessing Data":
+        st.header("🔧 Preprocessing Data Lengkap")
+        
+        if st.session_state.df is not None:
+            results = comprehensive_preprocessing(st.session_state.df)
+            
+            if results[0] is not None:
+                df_clean, df_processed, X_train, X_test, y_train, y_test, target, features, encoders = results
+                
+                # Simpan ke session state
+                st.session_state.df_clean = df_clean
+                st.session_state.df_processed = df_processed
+                st.session_state.X_train = X_train
+                st.session_state.X_test = X_test
+                st.session_state.y_train = y_train
+                st.session_state.y_test = y_test
+                st.session_state.target = target
+                st.session_state.features = features
+                st.session_state.encoders = encoders
+                
+                st.success("✅ Preprocessing data selesai!")
+                
+                # Tampilkan ringkasan
+                with st.expander("📊 Ringkasan Preprocessing"):
+                    st.write("**Data Cleaning:**")
+                    st.write(f"- Missing values ditangani: Ya")
+                    st.write(f"- Duplikat dihapus: Ya")
+                    
+                    st.write("**Encoding:**")
+                    st.write(f"- Kolom kategorikal di-encode: Ya")
+                    
+                    st.write("**Split Data:**")
+                    st.write(f"- Training data: {len(X_train)} sampel")
+                    st.write(f"- Testing data: {len(X_test)} sampel")
+                    st.write(f"- Fitur: {len(features)} variabel")
+                    st.write(f"- Target: {target}")
+        else:
+            st.warning("Silakan upload atau gunakan dataset terlebih dahulu di menu 'Data Awal'")
+    
+    # Menu Model Random Forest
+    elif menu == "🌳 Model Random Forest":
+        if hasattr(st.session_state, 'X_train') and st.session_state.X_train is not None:
+            model, predictions = train_random_forest_model(
+                st.session_state.X_train,
+                st.session_state.X_test,
+                st.session_state.y_train,
+                st.session_state.y_test,
+                st.session_state.target
+            )
+            
+            if model is not None:
+                st.session_state.model = model
+                st.session_state.predictions = predictions
+        else:
+            st.warning("Silakan lakukan preprocessing data terlebih dahulu di menu 'Preprocessing Data'")
+    
+    # Menu Evaluasi & Rekomendasi
+    elif menu == "📋 Evaluasi & Rekomendasi":
+        if st.session_state.df_clean is not None:
+            evaluation_and_recommendations(
+                st.session_state.df_clean,
+                st.session_state.target if hasattr(st.session_state, 'target') else None,
+                st.session_state.predictions if hasattr(st.session_state, 'predictions') else None
+            )
+        else:
+            st.warning("Silakan lakukan preprocessing data terlebih dahulu")
+    
+    # Dashboard Analisis
+    elif menu == "📈 Dashboard Analisis":
+        st.header("📈 Dashboard Analisis Komprehensif")
+        
+        if st.session_state.df is not None:
+            # Buat dashboard dengan metrik
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                avg_ipk = st.session_state.df['IPK'].mean() if 'IPK' in st.session_state.df.columns else 0
+                st.metric("Rata-rata IPK", f"{avg_ipk:.2f}")
+            
+            with col2:
+                ai_usage = st.session_state.df['Frekuensi_Penggunaan_AI'].value_counts().index[0] if 'Frekuensi_Penggunaan_AI' in st.session_state.df.columns else "N/A"
+                st.metric("Frekuensi AI Terbanyak", ai_usage)
+            
+            with col3:
+                study_hours = st.session_state.df['Jam_Belajar_Mingguan'].mean() if 'Jam_Belajar_Mingguan' in st.session_state.df.columns else 0
+                st.metric("Rata-rata Jam Belajar", f"{study_hours:.1f} jam/minggu")
+            
+            with col4:
+                total_students = len(st.session_state.df)
+                st.metric("Total Mahasiswa", total_students)
+            
+            # Visualisasi interaktif
+            st.subheader("Analisis Hubungan Penggunaan AI dan Performa")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if 'Frekuensi_Penggunaan_AI' in st.session_state.df.columns and 'IPK' in st.session_state.df.columns:
+                    fig = px.box(st.session_state.df, x='Frekuensi_Penggunaan_AI', y='IPK',
+                               title='Distribusi IPK berdasarkan Frekuensi Penggunaan AI')
+                    st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                if 'Tingkat_Ketergantungan_AI' in st.session_state.df.columns and 'Nilai_UAS' in st.session_state.df.columns:
+                    fig = px.scatter(st.session_state.df, x='Tingkat_Ketergantungan_AI', y='Nilai_UAS',
+                                   color='Semester' if 'Semester' in st.session_state.df.columns else None,
+                                   title='Hubungan Ketergantungan AI dan Nilai UAS')
+                    st.plotly_chart(fig, use_container_width=True)
+            
+            # Analisis fakultas
+            if 'Fakultas' in st.session_state.df.columns:
+                st.subheader("Analisis per Fakultas")
+                
+                faculty_stats = st.session_state.df.groupby('Fakultas').agg({
+                    'IPK': 'mean',
+                    'Jam_Belajar_Mingguan': 'mean',
+                    'Frekuensi_Penggunaan_AI': lambda x: x.mode()[0] if not x.mode().empty else 'N/A'
+                }).round(2)
+                
+                st.dataframe(faculty_stats)
+        else:
+            st.warning("Silakan upload dataset terlebih dahulu")
+
+# Dashboard Mahasiswa
+def mahasiswa_dashboard():
+    st.sidebar.title("👨‍🎓 Dashboard Mahasiswa")
+    st.sidebar.markdown("---")
+    
+    # Info mahasiswa
+    if 'student_name' in st.session_state:
+        st.sidebar.write(f"👤 **Nama:** {st.session_state.student_name}")
+    
+    if st.sidebar.button("🚪 Logout"):
+        st.session_state.logged_in = False
+        st.session_state.user_type = None
+        st.session_state.student_name = None
+        st.rerun()
+    
+    st.title("📋 Hasil Analisis Penggunaan AI")
+    st.markdown("---")
+    
+    # Simulasi data mahasiswa
+    if 'student_name' in st.session_state:
+        student_name = st.session_state.student_name
+        
+        # Generate data acak untuk mahasiswa
+        np.random.seed(hash(student_name) % 1000)
+        
+        student_data = {
+            'Nama': student_name,
+            'NIM': f'2023{np.random.randint(10000, 99999)}',
+            'Fakultas': np.random.choice(['Teknik', 'Sains', 'Ekonomi', 'Kedokteran', 'Hukum']),
+            'Semester': np.random.randint(1, 9),
+            'IPK': np.round(np.random.uniform(2.5, 4.0), 2),
+            'Frekuensi_Penggunaan_AI': np.random.choice(['Sangat Rendah', 'Rendah', 'Sedang', 'Tinggi', 'Sangat Tinggi'], p=[0.1, 0.2, 0.4, 0.2, 0.1]),
+            'Tingkat_Ketergantungan_AI': np.random.choice(['Sangat Rendah', 'Rendah', 'Sedang', 'Tinggi', 'Sangat Tinggi']),
+            'Durasi_Penggunaan_AI': f"{np.random.randint(1, 30)} jam/minggu",
+            'Rata-rata_Nilai': np.random.randint(65, 95)
+        }
+        
+        # Tampilkan data mahasiswa
+        st.subheader(f"Profil Mahasiswa: {student_data['Nama']}")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.metric("NIM", student_data['NIM'])
+            st.metric("Fakultas", student_data['Fakultas'])
+            st.metric("Semester", student_data['Semester'])
+        
+        with col2:
+            st.metric("IPK", student_data['IPK'])
+            st.metric("Rata-rata Nilai", student_data['Rata-rata_Nilai'])
+            st.metric("Frekuensi Penggunaan AI", student_data['Frekuensi_Penggunaan_AI'])
+        
+        # Analisis dan klasifikasi
+        st.subheader("🎯 Klasifikasi Tingkat Penggunaan AI")
+        
+        # Tentukan klasifikasi berdasarkan frekuensi penggunaan AI
+        ai_frequency = student_data['Frekuensi_Penggunaan_AI']
+        ai_dependency = student_data['Tingkat_Ketergantungan_AI']
+        
+        # Mapping klasifikasi
+        classification_map = {
+            'Sangat Rendah': {'level': 'Aman', 'color': 'green'},
+            'Rendah': {'level': 'Aman', 'color': 'green'},
+            'Sedang': {'level': 'Perhatian', 'color': 'orange'},
+            'Tinggi': {'level': 'Waspada', 'color': 'red'},
+            'Sangat Tinggi': {'level': 'Kritis', 'color': 'darkred'}
+        }
+        
+        classification = classification_map.get(ai_frequency, {'level': 'Tidak Diketahui', 'color': 'gray'})
+        
+        # Tampilkan klasifikasi
         st.markdown(f"""
-        <div style='border-left: 4px solid {category_info["color"]}; 
-                    padding-left: 15px; 
-                    margin: 20px 0;'>
-            <h3>{category_info['icon']} {category_info['label']}</h3>
-            <p><strong>Level:</strong> {category_info['level']}</p>
-            <p><strong>Skor Risiko:</strong> {category_info['score']}/5</p>
-            <p><strong>Deskripsi:</strong> {category_info['description']}</p>
+        <div style='background-color:{classification['color']}20; padding:20px; border-radius:10px; border-left:5px solid {classification['color']}'>
+            <h3 style='color:{classification['color']}; margin-top:0;'>🏷️ Klasifikasi: {classification['level'].upper()}</h3>
+            <p><strong>Frekuensi Penggunaan AI:</strong> {ai_frequency}</p>
+            <p><strong>Tingkat Ketergantungan AI:</strong> {ai_dependency}</p>
         </div>
         """, unsafe_allow_html=True)
         
-        col1, col2 = st.columns(2)
+        # Rekomendasi personal
+        st.subheader("💡 Rekomendasi Personal")
         
-        with col1:
-            st.markdown("**Tindakan yang Disarankan:**")
-            for action in category_info['actions']:
-                st.write(f"• {action}")
-        
-        with col2:
-            st.markdown("**Rekomendasi untuk Mahasiswa:**")
-            for rec in category_info['recommendations']:
-                st.write(f"• {rec}")
-        
-        st.markdown("---")
-    
-    # Risk scale visualization
-    st.markdown("### 📊 Skala Risiko")
-    
-    categories = kb.get_all_categories()
-    colors = [kb.get_category_info(cat)['color'] for cat in categories]
-    labels = [kb.get_category_info(cat)['label'] for cat in categories]
-    scores = [kb.get_category_info(cat)['score'] for cat in categories]
-    
-    fig = create_progress_chart(labels, scores, colors)
-    st.plotly_chart(fig, use_container_width=True)
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-
-def show_settings():
-    """Pengaturan"""
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("### ⚙️ Pengaturan Aplikasi")
-    
-    tab1, tab2 = st.tabs(["Umum", "Notifikasi"])
-    
-    with tab1:
-        st.markdown("#### Pengaturan Umum")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            language = st.selectbox("Bahasa", ["Indonesia", "English"])
-            theme = st.selectbox("Tema", ["Light", "Dark", "Auto"])
-            rows_per_page = st.slider("Baris per halaman", 10, 100, 20)
-        
-        with col2:
-            auto_save = st.checkbox("Auto-save changes", value=True)
-            show_tutorial = st.checkbox("Show tutorial on startup", value=False)
-            enable_analytics = st.checkbox("Enable analytics", value=True)
-        
-        if st.button("💾 Simpan Pengaturan", use_container_width=True):
-            st.success("Pengaturan berhasil disimpan!")
-    
-    with tab2:
-        st.markdown("#### Pengaturan Notifikasi")
-        
-        email_notif = st.checkbox("Email notifications", value=True)
-        push_notif = st.checkbox("Push notifications", value=True)
-        
-        st.markdown("**Jenis notifikasi:**")
-        new_data = st.checkbox("New data uploaded", value=True)
-        model_trained = st.checkbox("Model training completed", value=True)
-        high_risk = st.checkbox("High-risk students detected", value=True)
-        
-        frequency = st.selectbox("Frequency", ["Real-time", "Daily", "Weekly"])
-        
-        if st.button("💾 Simpan Notifikasi", use_container_width=True):
-            st.success("Pengaturan notifikasi berhasil disimpan!")
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# ============================================
-# DASHBOARD MAHASISWA
-# ============================================
-def mahasiswa_dashboard():
-    """Dashboard mahasiswa"""
-    # Sidebar mahasiswa
-    with st.sidebar:
-        if 'student_name' in st.session_state:
-            st.markdown(f"<h2>👨‍🎓 {st.session_state.student_name}</h2>", unsafe_allow_html=True)
-        
-        st.markdown("### 📊 Menu Mahasiswa")
-        
-        menu_option = st.selectbox(
-            "Navigasi",
-            ["🏠 Dashboard Saya", "📈 Analisis AI", "📋 Rekomendasi", "🎯 Tips & Panduan", "⚙️ Profil"]
-        )
-        
-        st.markdown("---")
-        st.markdown("### 📅 Quick Info")
-        st.info("**Deadline:** Tugas AI Ethics - 30 Nov 2024")
-        st.warning("**Warning:** Penggunaan AI Anda dalam kategori Waspada")
-        
-        st.markdown("---")
-        if st.button("🚪 Logout", use_container_width=True):
-            st.session_state.logged_in = False
-            st.rerun()
-    
-    # Main content
-    if menu_option == "🏠 Dashboard Saya":
-        show_student_dashboard()
-    elif menu_option == "📈 Analisis AI":
-        show_student_analysis()
-    elif menu_option == "📋 Rekomendasi":
-        show_student_recommendations()
-    elif menu_option == "🎯 Tips & Panduan":
-        show_student_guides()
-    elif menu_option == "⚙️ Profil":
-        show_student_profile()
-
-def show_student_dashboard():
-    """Dashboard utama mahasiswa"""
-    st.markdown(f"<h1>👋 Selamat Datang, {st.session_state.get('student_name', 'Mahasiswa')}!</h1>", unsafe_allow_html=True)
-    
-    # Quick stats
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        create_metric_card("IPK Saat Ini", "3.42", "+0.15", "📊")
-    with col2:
-        create_metric_card("Penggunaan AI", "22 jam", "↑ 5%", "🤖")
-    with col3:
-        create_metric_card("Jam Belajar", "28 jam", "↑ 2%", "📚")
-    with col4:
-        create_metric_card("Level Risiko", "Waspada", "", "⚠️")
-    
-    # Progress cards
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 📈 Progress Akademik")
-        
-        # Create progress chart
-        labels = ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4']
-        values = [2.8, 3.0, 3.2, 3.4]
-        
-        fig = go.Figure(data=[
-            go.Scatter(
-                x=labels,
-                y=values,
-                mode='lines+markers',
-                line=dict(color='#4e54c8', width=3),
-                marker=dict(size=10)
-            )
-        ])
-        
-        fig.update_layout(
-            height=200,
-            margin=dict(l=0, r=0, t=0, b=0),
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)'
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 🤖 Penggunaan AI")
-        
-        # AI usage by purpose
-        data = {
-            'Purpose': ['Tugas', 'Penelitian', 'Belajar', 'Lainnya'],
-            'Hours': [12, 5, 3, 2]
+        recommendations = {
+            'Sangat Rendah': [
+                "✅ Penggunaan AI Anda masih sangat rendah",
+                "✅ Pertahankan penggunaan yang sehat",
+                "💡 Coba eksplorasi tools AI untuk meningkatkan produktivitas"
+            ],
+            'Rendah': [
+                "✅ Penggunaan AI Anda dalam batas wajar",
+                "✅ Pertahankan keseimbangan",
+                "💡 Manfaatkan AI untuk tugas-tugas kompleks"
+            ],
+            'Sedang': [
+                "⚠️ Penggunaan AI Anda mulai sering",
+                "⚠️ Evaluasi kebutuhan penggunaan AI",
+                "💡 Kembangkan kemampuan analisis mandiri"
+            ],
+            'Tinggi': [
+                "🚨 Penggunaan AI Anda tinggi",
+                "🚨 Kurangi ketergantungan pada AI",
+                "💡 Konsultasi dengan dosen pembimbing"
+            ],
+            'Sangat Tinggi': [
+                "🚨🚨 Penggunaan AI Anda sangat tinggi",
+                "🚨🚨 Butuh intervensi segera",
+                "💡 Program khusus pengurangan ketergantungan AI"
+            ]
         }
         
-        fig = px.pie(data, values='Hours', names='Purpose', 
-                     color_discrete_sequence=px.colors.qualitative.Set3)
-        fig.update_layout(height=200, showlegend=False)
+        student_recommendations = recommendations.get(ai_frequency, [
+            "Tidak ada rekomendasi spesifik",
+            "Konsultasikan dengan dosen pembimbing"
+        ])
         
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    # Recent activities
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("### 📋 Aktivitas Terkini")
-    
-    activities = [
-        {"time": "Hari ini", "action": "Menggunakan AI untuk tugas matematika", "duration": "2 jam"},
-        {"time": "Kemarin", "action": "Konsultasi dengan dosen tentang penggunaan AI", "status": "✅ Selesai"},
-        {"time": "2 hari lalu", "action": "Workshop AI Ethics", "status": "🎓 Diikuti"},
-        {"time": "Minggu lalu", "action": "Evaluasi penggunaan AI pribadi", "status": "📊 Dilaporkan"}
-    ]
-    
-    for act in activities:
-        col1, col2, col3 = st.columns([2, 3, 2])
-        with col1:
-            st.write(f"**{act['time']}**")
-        with col2:
-            st.write(act['action'])
-        with col3:
-            st.write(act.get('duration', act.get('status', '')))
-    st.markdown("</div>", unsafe_allow_html=True)
-
-def show_student_analysis():
-    """Analisis untuk mahasiswa"""
-    st.markdown("<h1>📈 Analisis Penggunaan AI Saya</h1>", unsafe_allow_html=True)
-    
-    # Input data pribadi
-    with st.form("student_analysis_form"):
-        col1, col2 = st.columns(2)
+        for rec in student_recommendations:
+            st.write(f"• {rec}")
         
-        with col1:
-            ipk = st.slider("IPK Saat Ini", 2.0, 4.0, 3.4, 0.1)
-            study_hours = st.slider("Jam Belajar/Minggu", 5, 60, 25)
+        # Visualisasi perbandingan
+        st.subheader("📊 Perbandingan dengan Rata-rata Kelas")
         
-        with col2:
-            ai_hours = st.slider("Jam Penggunaan AI/Minggu", 0, 40, 15)
-            dependency = st.select_slider(
-                "Tingkat Ketergantungan pada AI",
-                options=['Sangat Rendah', 'Rendah', 'Sedang', 'Tinggi', 'Sangat Tinggi'],
-                value='Sedang'
-            )
-        
-        submitted = st.form_submit_button("🔍 Analisis Profil Saya", use_container_width=True)
-    
-    if submitted:
-        # Analyze based on inputs
-        kb = AIKnowledgeBase()
-        
-        # Determine category based on AI hours
-        if ai_hours < 5:
-            category = 'VERY_LOW'
-        elif ai_hours < 15:
-            category = 'LOW'
-        elif ai_hours < 25:
-            category = 'MEDIUM'
-        elif ai_hours < 35:
-            category = 'HIGH'
-        else:
-            category = 'VERY_HIGH'
-        
-        category_info = kb.get_category_info(category)
-        
-        # Display results
-        col1, col2 = st.columns([1, 2])
-        
-        with col1:
-            st.markdown(f"""
-            <div style='background: {category_info['color']}20; 
-                        padding: 30px; 
-                        border-radius: 15px; 
-                        text-align: center;'>
-                <h1 style='font-size: 4rem; margin: 0;'>{category_info['icon']}</h1>
-                <h2 style='color: {category_info['color']}; margin: 10px 0;'>{category_info['label']}</h2>
-                <h3>Level: {category_info['level']}</h3>
-                <p>Skor Risiko: {category_info['score']}/5</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown("<div class='card'>", unsafe_allow_html=True)
-            st.markdown(f"### 📋 Hasil Analisis")
-            
-            # Metrics
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("IPK", f"{ipk:.2f}")
-            with col2:
-                st.metric("Jam Belajar", f"{study_hours} jam")
-            with col3:
-                st.metric("Jam AI", f"{ai_hours} jam")
-            
-            st.markdown(f"**Deskripsi:** {category_info['description']}")
-            
-            with st.expander("📝 Detail Rekomendasi"):
-                st.markdown("**Tindakan yang Disarankan:**")
-                for action in category_info['actions']:
-                    st.write(f"• {action}")
-                
-                st.markdown("**Rekomendasi Khusus untuk Anda:**")
-                for rec in category_info['recommendations']:
-                    st.write(f"• {rec}")
-            
-            st.markdown("</div>", unsafe_allow_html=True)
-        
-        # Visualization
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 📊 Visualisasi Data")
+        # Data contoh rata-rata kelas
+        class_avg = {
+            'IPK': 3.25,
+            'Frekuensi_Penggunaan_AI': 'Sedang',
+            'Jam_Belajar': 25,
+            'Ketergantungan_AI': 'Sedang'
+        }
         
         fig = go.Figure()
         
         fig.add_trace(go.Indicator(
-            mode="gauge+number",
-            value=ai_hours,
-            title={'text': "Jam AI/Minggu"},
-            domain={'x': [0, 0.33], 'y': [0, 1]},
-            gauge={'axis': {'range': [0, 40]},
-                   'bar': {'color': category_info['color']},
-                   'steps': [
-                       {'range': [0, 10], 'color': "#28a74520"},
-                       {'range': [10, 20], 'color': "#ffc10720"},
-                       {'range': [20, 40], 'color': "#dc354520"}
-                   ]}
-        ))
-        
-        fig.add_trace(go.Indicator(
-            mode="gauge+number",
-            value=ipk,
+            mode="gauge+number+delta",
+            value=student_data['IPK'],
+            delta={'reference': class_avg['IPK']},
             title={'text': "IPK"},
-            domain={'x': [0.34, 0.66], 'y': [0, 1]},
-            gauge={'axis': {'range': [2, 4]},
-                   'bar': {'color': '#4e54c8'}}
+            domain={'row': 0, 'column': 0},
+            gauge={'axis': {'range': [2.0, 4.0]}}
         ))
         
-        fig.add_trace(go.Indicator(
-            mode="gauge+number",
-            value=study_hours,
-            title={'text': "Jam Belajar"},
-            domain={'x': [0.67, 1], 'y': [0, 1]},
-            gauge={'axis': {'range': [0, 60]},
-                   'bar': {'color': '#20c997'}}
-        ))
+        fig.update_layout(
+            grid={'rows': 1, 'columns': 1, 'pattern': "independent"},
+            height=300
+        )
         
-        fig.update_layout(height=250, margin=dict(l=0, r=0, t=0, b=0))
         st.plotly_chart(fig, use_container_width=True)
         
-        st.markdown("</div>", unsafe_allow_html=True)
-
-def show_student_recommendations():
-    """Rekomendasi untuk mahasiswa"""
-    st.markdown("<h1>💡 Rekomendasi Personal</h1>", unsafe_allow_html=True)
-    
-    kb = AIKnowledgeBase()
-    
-    # Simulate student data
-    student_category = 'MEDIUM'  # This would come from actual analysis
-    
-    # Get recommendations
-    category_info = kb.get_category_info(student_category)
-    
-    st.markdown(f"""
-    <div style='background: linear-gradient(135deg, {category_info['color']}20 0%, #ffffff 100%);
-                padding: 30px;
-                border-radius: 15px;
-                margin-bottom: 20px;'>
-        <h2>{category_info['icon']} Status Anda: {category_info['label']}</h2>
-        <p style='font-size: 1.2rem;'>{category_info['description']}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Action plan
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("### 🎯 Rencana Aksi")
-    
-    action_plan = [
-        {
-            "title": "Minggu 1-2",
-            "actions": [
-                "Kurangi penggunaan AI untuk tugas sederhana",
-                "Catat semua penggunaan AI dalam jurnal",
-                "Ikuti workshop 'Belajar Tanpa AI'"
-            ]
-        },
-        {
-            "title": "Minggu 3-4",
-            "actions": [
-                "Batasi penggunaan AI maksimal 2 jam/hari",
-                "Konsultasi dengan dosen pembimbing",
-                "Coba metode belajar tradisional"
-            ]
-        },
-        {
-            "title": "Minggu 5-8",
-            "actions": [
-                "Evaluasi progress pengurangan ketergantungan",
-                "Tingkatkan kemampuan problem-solving mandiri",
-                "Bagikan pengalaman dengan teman"
-            ]
-        }
-    ]
-    
-    for week in action_plan:
-        with st.expander(f"📅 {week['title']}"):
-            for action in week['actions']:
-                st.write(f"• {action}")
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-    
-    # Resources
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("### 📚 Sumber Daya yang Direkomendasikan")
-    
-    resources = [
-        {"title": "📘 Buku: 'Digital Minimalism'", "type": "Bacaan", "duration": "2 minggu"},
-        {"title": "🎥 Video: 'Ethical AI Usage'", "type": "Video", "duration": "45 menit"},
-        {"title": "👨‍🏫 Workshop: 'Critical Thinking Skills'", "type": "Event", "date": "15 Nov 2024"},
-        {"title": "🔄 App: 'Digital Detox Tracker'", "type": "Aplikasi", "platform": "Android/iOS"}
-    ]
-    
-    for res in resources:
-        col1, col2, col3 = st.columns([3, 2, 2])
-        with col1:
-            st.write(f"**{res['title']}**")
-        with col2:
-            st.write(res['type'])
-        with col3:
-            st.write(res.get('duration', res.get('date', res.get('platform', ''))))
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-
-def show_student_guides():
-    """Tips dan panduan"""
-    st.markdown("<h1>🎯 Tips & Panduan</h1>", unsafe_allow_html=True)
-    
-    tab1, tab2, tab3 = st.tabs(["📖 Panduan AI", "💡 Tips Belajar", "🛡️ Keamanan Digital"])
-    
-    with tab1:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 📖 Panduan Penggunaan AI yang Sehat")
-        
-        guides = [
-            {
-                "title": "1. Gunakan AI sebagai Asisten, Bukan Pengganti",
-                "content": "AI seharusnya membantu proses belajar, bukan menggantikan pemikiran kritis Anda."
-            },
-            {
-                "title": "2. Verifikasi Semua Hasil AI",
-                "content": "Selalu cek kebenaran informasi dari AI dengan sumber terpercaya."
-            },
-            {
-                "title": "3. Tetap Kembangkan Skill Dasar",
-                "content": "Jangan biarkan AI membuat Anda kehilangan kemampuan fundamental."
-            },
-            {
-                "title": "4. Atur Batas Waktu",
-                "content": "Tetapkan waktu maksimal penggunaan AI per hari untuk mencegah ketergantungan."
-            },
-            {
-                "title": "5. Diskusikan dengan Dosen",
-                "content": "Konsultasikan penggunaan AI Anda dengan dosen untuk mendapatkan panduan yang tepat."
-            }
-        ]
-        
-        for guide in guides:
-            st.markdown(f"**{guide['title']}**")
-            st.write(guide['content'])
-            st.write("")
-        
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with tab2:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 💡 Tips Belajar Efektif")
+        # Tips penggunaan AI yang sehat
+        st.subheader("🌟 Tips Penggunaan AI yang Sehat")
         
         tips = [
-            "🎯 **Fokus pada Pemahaman**, bukan hafalan",
-            "⏰ **Gunakan Teknik Pomodoro**: 25 menit belajar, 5 menit istirahat",
-            "📝 **Buat Catatan Manual** untuk meningkatkan daya ingat",
-            "🔄 **Review Materi** secara berkala",
-            "👥 **Belajar Kelompok** untuk diskusi dan sharing",
-            "🏃 **Jaga Kesehatan** dengan olahraga teratur",
-            "💤 **Istirahat Cukup** untuk optimalisasi memori"
+            "1. **Gunakan AI sebagai alat bantu**, bukan pengganti pemikiran",
+            "2. **Verifikasi hasil AI** dengan sumber terpercaya",
+            "3. **Kembangkan kemampuan kritis** tanpa bergantung pada AI",
+            "4. **Batasi waktu penggunaan** AI untuk tugas akademik",
+            "5. **Diskusikan dengan dosen** tentang penggunaan AI yang tepat",
+            "6. **Pelajari konsep dasar** sebelum menggunakan AI untuk solusi",
+            "7. **Jaga keseimbangan** antara teknologi dan kemampuan manusiawi"
         ]
         
         for tip in tips:
             st.write(tip)
-        
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with tab3:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 🛡️ Keamanan Digital")
-        
-        st.markdown("**Privasi Data:**")
-        st.write("• Jangan bagikan data pribadi ke AI")
-        st.write("• Gunakan akun terpisah untuk aktivitas akademik")
-        st.write("• Periksa kebijakan privasi tools AI yang digunakan")
-        
-        st.markdown("**Keamanan Akademik:**")
-        st.write("• Pahami kebijakan plagiarisme kampus")
-        st.write("• Simpan semua percakapan dengan AI sebagai bukti")
-        st.write("• Laporkan penyalahgunaan AI yang Anda temui")
-        
-        st.markdown("**Etika Digital:**")
-        st.write("• Hormati hak cipta dan kekayaan intelektual")
-        st.write("• Gunakan AI untuk kebaikan, bukan kecurangan")
-        st.write("• Berkontribusi positif pada komunitas digital")
-        
-        st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        st.warning("Data mahasiswa tidak ditemukan.")
 
-def show_student_profile():
-    """Profil mahasiswa"""
-    st.markdown("<h1>⚙️ Profil Saya</h1>", unsafe_allow_html=True)
-    
-    with st.form("student_profile_form"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            nama = st.text_input("Nama Lengkap", value=st.session_state.get('student_name', ''))
-            nim = st.text_input("NIM", value="20230001")
-            email = st.text_input("Email", value="mahasiswa@example.com")
-        
-        with col2:
-            fakultas = st.selectbox("Fakultas", ["Teknik", "Sains", "Ekonomi", "Kedokteran", "Hukum"])
-            program_studi = st.text_input("Program Studi", value="Informatika")
-            semester = st.slider("Semester", 1, 8, 5)
-        
-        # Preferences
-        st.markdown("### ⚙️ Preferensi")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            notif_email = st.checkbox("Notifikasi Email", value=True)
-            notif_push = st.checkbox("Notifikasi Push", value=True)
-        
-        with col2:
-            dark_mode = st.checkbox("Mode Gelap", value=False)
-            auto_save = st.checkbox("Auto-save", value=True)
-        
-        with col3:
-            language = st.selectbox("Bahasa", ["Indonesia", "English"])
-            timezone = st.selectbox("Zona Waktu", ["WIB", "WITA", "WIT"])
-        
-        submitted = st.form_submit_button("💾 Simpan Perubahan", use_container_width=True)
-    
-    if submitted:
-        st.success("✅ Profil berhasil diperbarui!")
-        
-        # Save to session state
-        st.session_state.student_name = nama
-    
-    # Account security
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("### 🔒 Keamanan Akun")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("🔄 Ganti Password", use_container_width=True):
-            st.info("Fitur ganti password akan segera tersedia")
-    
-    with col2:
-        if st.button("📱 Verifikasi 2FA", use_container_width=True):
-            st.info("Fitur 2FA akan segera tersedia")
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-    
-    # Data export
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("### 📤 Ekspor Data")
-    
-    if st.button("📥 Download Data Saya", use_container_width=True):
-        # Create sample data
-        data = {
-            'Nama': [nama],
-            'NIM': [nim],
-            'Fakultas': [fakultas],
-            'Program Studi': [program_studi],
-            'Semester': [semester],
-            'Email': [email]
-        }
-        
-        df = pd.DataFrame(data)
-        csv = df.to_csv(index=False)
-        
-        st.download_button(
-            label="⬇️ Download sebagai CSV",
-            data=csv,
-            file_name="profil_mahasiswa.csv",
-            mime="text/csv"
-        )
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# ============================================
-# APLIKASI UTAMA
-# ============================================
+# Aplikasi utama
 def main():
-    # Initialize session state
+    # Inisialisasi session state
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
-    if 'role' not in st.session_state:
-        st.session_state.role = None
+        st.session_state.user_type = None
     
-    # Show appropriate page
+    # Custom CSS
+    st.markdown("""
+    <style>
+    .main-header {
+        font-size: 2.5rem;
+        color: #2E86AB;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .stButton button {
+        background-color: #2E86AB;
+        color: white;
+        border-radius: 10px;
+        padding: 10px 24px;
+        font-weight: bold;
+    }
+    .stButton button:hover {
+        background-color: #1B657D;
+    }
+    .metric-card {
+        background-color: #f0f8ff;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #2E86AB;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Tampilkan halaman sesuai status login
     if not st.session_state.logged_in:
         login_page()
     else:
-        if st.session_state.role == "dosen":
-            dosen_dashboard()
+        if st.session_state.user_type == "guru":
+            guru_dashboard()
         else:
             mahasiswa_dashboard()
 
