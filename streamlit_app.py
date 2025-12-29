@@ -5,11 +5,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 import plotly.express as px
 import plotly.graph_objects as go
-import plotly.subplots as sp
 from io import StringIO
 import warnings
 warnings.filterwarnings('ignore')
@@ -204,6 +203,12 @@ def display_supervision_level(level):
         </div>
         """, unsafe_allow_html=True)
 
+# Inisialisasi session state
+if 'dataset' not in st.session_state:
+    st.session_state.dataset = create_sample_dataset()
+    st.session_state.model_trained = False
+    st.session_state.data_processed = False
+
 # Fungsi untuk dashboard guru
 def teacher_dashboard():
     st.markdown('<h1 class="main-header">🤖 DASHBOARD GURU - SISTEM PEMANTAUAN PENGGUNAAN AI MAHASISWA</h1>', unsafe_allow_html=True)
@@ -214,10 +219,6 @@ def teacher_dashboard():
         "Pilih Menu:",
         ["📊 OVERVIEW DATA", "🧹 PREPROCESSING DATA", "🤖 MODELING & EVALUASI", "📈 REKOMENDASI PENGAWASAN"]
     )
-    
-    # Load dataset
-    if 'dataset' not in st.session_state:
-        st.session_state.dataset = create_sample_dataset()
     
     df = st.session_state.dataset
     
@@ -355,99 +356,94 @@ def teacher_dashboard():
         st.markdown('<div class="card"><h4>🔢 ENCODING DATA KATEGORIKAL</h4></div>', unsafe_allow_html=True)
         
         categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
-        categorical_cols = [col for col in categorical_cols if col not in ['Nama', 'NIM']]
+        categorical_cols = [col for col in categorical_cols if col not in ['Nama', 'NIM', 'Level_Pengawasan']]
         
         st.write(f"**Kolom kategorikal yang akan di-encode:**")
         for col in categorical_cols:
             st.write(f"- {col}: {df[col].nunique()} unique values")
         
-        encoding_method = st.radio("Pilih metode encoding:", ["Label Encoding", "One-Hot Encoding"])
-        
-        if st.button("🚀 Lakukan Encoding", use_container_width=True):
+        if st.button("🚀 Lakukan Label Encoding", use_container_width=True):
             # Simpan data asli untuk referensi
             if 'original_categorical' not in st.session_state:
                 st.session_state.original_categorical = {}
-                for col in categorical_cols:
-                    st.session_state.original_categorical[col] = df[col].copy()
             
-            if encoding_method == "Label Encoding":
-                # Lakukan Label Encoding
-                label_encoders = {}
-                for col in categorical_cols:
-                    le = LabelEncoder()
-                    df[col] = le.fit_transform(df[col].astype(str))
-                    label_encoders[col] = le
-                
-                st.session_state.label_encoders = label_encoders
-                st.session_state.encoding_method = "Label Encoding"
-            else:
-                # Lakukan One-Hot Encoding
-                df = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
-                st.session_state.encoding_method = "One-Hot Encoding"
+            # Lakukan Label Encoding
+            label_encoders = {}
+            df_encoded = df.copy()
             
-            st.session_state.dataset = df
-            st.success(f"✅ {encoding_method} berhasil dilakukan!")
+            for col in categorical_cols:
+                le = LabelEncoder()
+                df_encoded[col] = le.fit_transform(df_encoded[col].astype(str))
+                label_encoders[col] = le
+                st.session_state.original_categorical[col] = df[col].copy()
+            
+            st.session_state.label_encoders = label_encoders
+            st.session_state.dataset_encoded = df_encoded
+            st.session_state.data_processed = True
+            st.success("✅ Label encoding berhasil dilakukan!")
             
             # Tampilkan contoh hasil encoding
             st.write("**Contoh data setelah encoding:**")
-            st.dataframe(df.iloc[:, :10].head(), use_container_width=True)
+            st.dataframe(df_encoded.iloc[:, :10].head(), use_container_width=True)
         
         # Split Data
-        st.markdown('<div class="card"><h4>✂️ SPLIT DATA (TRAINING & TESTING)</h4></div>', unsafe_allow_html=True)
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            test_size = st.slider("Persentase Data Testing (%)", 10, 40, 20, help="Persentase data yang akan digunakan untuk testing")
-        
-        with col2:
-            target_col = st.selectbox("Pilih Target Variable", 
-                                     ['Level_Pengawasan'] + df.columns.tolist(),
-                                     index=0)
-        
-        with col3:
-            random_state = st.number_input("Random State", min_value=0, max_value=100, value=42)
-        
-        if st.button("🎯 Split Data", use_container_width=True):
-            # Pisahkan fitur dan target
-            exclude_cols = ['Nama', 'NIM']
-            if target_col not in exclude_cols:
-                exclude_cols.append(target_col)
+        if st.session_state.data_processed:
+            st.markdown('<div class="card"><h4>✂️ SPLIT DATA (TRAINING & TESTING)</h4></div>', unsafe_allow_html=True)
             
-            X = df.drop(columns=[col for col in exclude_cols if col in df.columns], errors='ignore')
-            y = df[target_col]
-            
-            # Split data
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size/100, random_state=random_state, stratify=y
-            )
-            
-            # Simpan di session state
-            st.session_state.X_train = X_train
-            st.session_state.X_test = X_test
-            st.session_state.y_train = y_train
-            st.session_state.y_test = y_test
-            st.session_state.target_col = target_col
-            
-            st.success(f"✅ Data berhasil di-split!")
-            
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("Training Data", f"{len(X_train)} sampel ({100-test_size}%)")
+                test_size = st.slider("Persentase Data Testing (%)", 10, 40, 20, help="Persentase data yang akan digunakan untuk testing")
+            
             with col2:
-                st.metric("Testing Data", f"{len(X_test)} sampel ({test_size}%)")
+                target_col = 'Level_Pengawasan'
+                st.info(f"Target Variable: {target_col}")
             
-            # Tampilkan distribusi kelas
-            train_dist = y_train.value_counts()
-            test_dist = y_test.value_counts()
+            with col3:
+                random_state = st.number_input("Random State", min_value=0, max_value=100, value=42)
             
-            fig = go.Figure()
-            fig.add_trace(go.Bar(x=train_dist.index, y=train_dist.values, name='Training', marker_color='#3B82F6'))
-            fig.add_trace(go.Bar(x=test_dist.index, y=test_dist.values, name='Testing', marker_color='#10B981'))
-            fig.update_layout(title='Distribusi Kelas di Training dan Testing Data',
-                             xaxis_title='Level Pengawasan',
-                             yaxis_title='Jumlah Sampel',
-                             barmode='group')
-            st.plotly_chart(fig, use_container_width=True)
+            if st.button("🎯 Split Data", use_container_width=True):
+                # Pisahkan fitur dan target
+                X = st.session_state.dataset_encoded.drop(columns=['Nama', 'NIM', 'Level_Pengawasan'], errors='ignore')
+                y = st.session_state.dataset_encoded[target_col]
+                
+                # Encoding target variable
+                le_target = LabelEncoder()
+                y_encoded = le_target.fit_transform(y)
+                st.session_state.le_target = le_target
+                
+                # Split data
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X, y_encoded, test_size=test_size/100, random_state=random_state, stratify=y_encoded
+                )
+                
+                # Simpan di session state
+                st.session_state.X_train = X_train
+                st.session_state.X_test = X_test
+                st.session_state.y_train = y_train
+                st.session_state.y_test = y_test
+                st.session_state.target_col = target_col
+                
+                st.success(f"✅ Data berhasil di-split!")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Training Data", f"{len(X_train)} sampel ({100-test_size}%)")
+                with col2:
+                    st.metric("Testing Data", f"{len(X_test)} sampel ({test_size}%)")
+                
+                # Tampilkan distribusi kelas
+                from collections import Counter
+                train_dist = Counter(le_target.inverse_transform(y_train))
+                test_dist = Counter(le_target.inverse_transform(y_test))
+                
+                train_df = pd.DataFrame({'Level': list(train_dist.keys()), 'Jumlah': list(train_dist.values()), 'Set': 'Training'})
+                test_df = pd.DataFrame({'Level': list(test_dist.keys()), 'Jumlah': list(test_dist.values()), 'Set': 'Testing'})
+                dist_df = pd.concat([train_df, test_df])
+                
+                fig = px.bar(dist_df, x='Level', y='Jumlah', color='Set',
+                            barmode='group', color_discrete_map={'Training': '#3B82F6', 'Testing': '#10B981'},
+                            title='Distribusi Kelas di Training dan Testing Data')
+                st.plotly_chart(fig, use_container_width=True)
     
     elif menu_option == "🤖 MODELING & EVALUASI":
         st.markdown('<div class="card"><h3 class="sub-header">🤖 MODELING DENGAN RANDOM FOREST</h3></div>', unsafe_allow_html=True)
@@ -476,7 +472,7 @@ def teacher_dashboard():
             min_samples_leaf = st.slider("Min Samples Leaf", 1, 10, 2, 1,
                                         help="Jumlah sampel minimal di leaf")
         with col2:
-            max_features = st.selectbox("Max Features", ['sqrt', 'log2', 'auto', None])
+            max_features = st.selectbox("Max Features", ['sqrt', 'log2', None])
         with col3:
             random_state = st.number_input("Random State Model", 0, 100, 42)
         
@@ -510,7 +506,9 @@ def teacher_dashboard():
                 st.session_state.accuracy = accuracy
                 
                 # Classification report
-                report = classification_report(st.session_state.y_test, y_pred, output_dict=True)
+                report = classification_report(st.session_state.y_test, y_pred, 
+                                              target_names=st.session_state.le_target.classes_, 
+                                              output_dict=True)
                 st.session_state.classification_report = report
                 
                 # Confusion matrix
@@ -518,6 +516,7 @@ def teacher_dashboard():
                 st.session_state.confusion_matrix = cm
                 
                 st.success(f"✅ Model berhasil dilatih dengan akurasi: {accuracy:.2%}")
+                st.session_state.model_trained = True
                 
                 # Feature Importance
                 feature_importance = pd.DataFrame({
@@ -552,8 +551,8 @@ def teacher_dashboard():
                 sns.heatmap(st.session_state.confusion_matrix, 
                            annot=True, fmt='d', 
                            cmap='Reds',
-                           xticklabels=st.session_state.rf_model.classes_,
-                           yticklabels=st.session_state.rf_model.classes_,
+                           xticklabels=st.session_state.le_target.classes_,
+                           yticklabels=st.session_state.le_target.classes_,
                            ax=ax)
                 ax.set_xlabel('Predicted')
                 ax.set_ylabel('Actual')
@@ -567,45 +566,8 @@ def teacher_dashboard():
                 # Classification Report
                 st.write("**Classification Report:**")
                 report_df = pd.DataFrame(st.session_state.classification_report).transpose()
-                st.dataframe(report_df.style.background_gradient(cmap='Blues', subset=['precision', 'recall', 'f1-score']), 
+                st.dataframe(report_df[['precision', 'recall', 'f1-score', 'support']].style.background_gradient(cmap='Blues', subset=['precision', 'recall', 'f1-score']), 
                            use_container_width=True)
-            
-            # ROC Curve untuk multi-class
-            st.markdown('<div class="card"><h4>📉 ROC CURVE (Multi-class)</h4></div>', unsafe_allow_html=True)
-            
-            # Untuk ROC curve multi-class
-            from sklearn.preprocessing import label_binarize
-            from sklearn.metrics import roc_curve, auc
-            
-            y_test_bin = label_binarize(st.session_state.y_test, 
-                                       classes=st.session_state.rf_model.classes_)
-            n_classes = y_test_bin.shape[1]
-            
-            # Hitung ROC curve dan ROC area untuk setiap kelas
-            fpr = dict()
-            tpr = dict()
-            roc_auc = dict()
-            
-            for i in range(n_classes):
-                fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], st.session_state.y_pred_proba[:, i])
-                roc_auc[i] = auc(fpr[i], tpr[i])
-            
-            # Plot semua ROC curves
-            fig, ax = plt.subplots(figsize=(10, 8))
-            colors = ['#10B981', '#F59E0B', '#EF4444']
-            
-            for i, color in zip(range(n_classes), colors[:n_classes]):
-                ax.plot(fpr[i], tpr[i], color=color, lw=2,
-                       label='ROC curve kelas {0} (area = {1:0.2f})'.format(st.session_state.rf_model.classes_[i], roc_auc[i]))
-            
-            ax.plot([0, 1], [0, 1], 'k--', lw=2)
-            ax.set_xlim([0.0, 1.0])
-            ax.set_ylim([0.0, 1.05])
-            ax.set_xlabel('False Positive Rate')
-            ax.set_ylabel('True Positive Rate')
-            ax.set_title('Multi-class ROC Curve')
-            ax.legend(loc="lower right")
-            st.pyplot(fig)
     
     elif menu_option == "📈 REKOMENDASI PENGAWASAN":
         st.markdown('<div class="card"><h3 class="sub-header">📈 REKOMENDASI STRATEGI PENGAWASAN</h3></div>', unsafe_allow_html=True)
@@ -617,15 +579,9 @@ def teacher_dashboard():
         # Analisis tingkat pengawasan
         st.markdown('<div class="card"><h4>🎯 DISTRIBUSI LEVEL PENGAWASAN BERDASARKAN PREDIKSI</h4></div>', unsafe_allow_html=True)
         
-        # Prediksi untuk seluruh dataset
-        if 'label_encoders' in st.session_state and 'Level_Pengawasan' in st.session_state.label_encoders:
-            # Decode jika perlu
-            le = st.session_state.label_encoders['Level_Pengawasan']
-            y_pred_decoded = le.inverse_transform(st.session_state.y_pred)
-            y_test_decoded = le.inverse_transform(st.session_state.y_test)
-        else:
-            y_pred_decoded = st.session_state.y_pred
-            y_test_decoded = st.session_state.y_test
+        # Decode prediksi
+        y_pred_decoded = st.session_state.le_target.inverse_transform(st.session_state.y_pred)
+        y_test_decoded = st.session_state.le_target.inverse_transform(st.session_state.y_test)
         
         # Hitung distribusi
         pred_counts = pd.Series(y_pred_decoded).value_counts()
@@ -776,10 +732,6 @@ def teacher_dashboard():
 def student_dashboard():
     st.markdown('<h1 class="main-header">👨‍🎓 DASHBOARD SISWA - MONITORING PENGGUNAAN AI</h1>', unsafe_allow_html=True)
     
-    # Load dataset
-    if 'dataset' not in st.session_state:
-        st.session_state.dataset = create_sample_dataset()
-    
     df = st.session_state.dataset
     
     # Sidebar untuk pencarian
@@ -877,15 +829,16 @@ def student_dashboard():
         # Normalisasi nilai (skala 1-5)
         frekuensi_norm = min(student_data['Frekuensi_Penggunaan_AI_per_minggu'] / 7 * 5, 5)
         
-        durasi_map = {0.5:1, 1:1.5, 2:2, 3:2.5, 4:3, 5:3.5, 6:4, 7:4.5, 8:5}
-        durasi_norm = durasi_map.get(round(student_data['Durasi_Penggunaan_AI_jam_per_hari']), 2.5)
+        # Mapping durasi ke skala 1-5
+        durasi = student_data['Durasi_Penggunaan_AI_jam_per_hari']
+        durasi_norm = min(durasi / 2, 5)  # Asumsi 10 jam maksimal = skala 5
         
-        kemahiran_map = {'Pemula':1, 'Menengah':2, 'Mahir':4, 'Expert':5}
+        kemahiran_map = {'Pemula': 1, 'Menengah': 2, 'Mahir': 4, 'Expert': 5}
         kemahiran_norm = kemahiran_map.get(student_data['Tingkat_Kemahiran_AI'], 2.5)
         
         tujuan_norm = 3  # Default
         
-        dampak_map = {'Menurun':1, 'Tidak Berubah':3, 'Meningkat':5}
+        dampak_map = {'Menurun': 1, 'Tidak Berubah': 3, 'Meningkat': 5}
         dampak_norm = dampak_map.get(student_data['Dampak_Pada_Pemahaman'], 3)
         
         values = [frekuensi_norm, durasi_norm, kemahiran_norm, tujuan_norm, dampak_norm]
