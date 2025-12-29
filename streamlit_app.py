@@ -1,1220 +1,645 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import hashlib
-import time
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import pickle
+import warnings
+warnings.filterwarnings('ignore')
 
-# Konfigurasi halaman
+# Set halaman
 st.set_page_config(
-    page_title="Sistem Analisis AI Mahasiswa",
+    page_title="Analisis Penggunaan AI - Performa Akademik",
     page_icon="🎓",
-    layout="wide",
-    initial_sidebar_state="collapsed"
+    layout="wide"
 )
 
-# CSS Styling
-st.markdown("""
-<style>
-    /* Reset sidebar */
-    section[data-testid="stSidebar"] {
-        display: none;
+# Fungsi untuk membuat dataset contoh
+def create_sample_dataset():
+    data = {
+        'Nama': [f'Mahasiswa_{i}' for i in range(1, 101)],
+        'Usia': np.random.randint(18, 25, 100),
+        'Jenis_Kelamin': np.random.choice(['Laki-laki', 'Perempuan'], 100),
+        'Fakultas': np.random.choice(['Teknik', 'Sains', 'Ekonomi', 'Kedokteran', 'Hukum'], 100),
+        'Semester': np.random.randint(1, 8, 100),
+        'IPK': np.round(np.random.uniform(2.0, 4.0, 100), 2),
+        'Jam_Belajar_Mingguan': np.random.randint(10, 40, 100),
+        'Frekuensi_Penggunaan_AI': np.random.choice(['Rendah', 'Sedang', 'Tinggi'], 100, p=[0.3, 0.5, 0.2]),
+        'Tujuan_Penggunaan_AI': np.random.choice(['Tugas', 'Penelitian', 'Belajar', 'Proyek'], 100),
+        'Tingkat_Ketergantungan_AI': np.random.choice(['Rendah', 'Sedang', 'Tinggi'], 100),
+        'Perform_Akademik': np.random.choice(['Buruk', 'Cukup', 'Baik', 'Sangat Baik'], 100)
     }
+    return pd.DataFrame(data)
+
+# Fungsi untuk preprocessing data
+def preprocess_data(df):
+    df_clean = df.copy()
     
-    /* Main container */
-    .main-container {
-        max-width: 100%;
-        padding: 20px;
-    }
+    # Data Cleaning
+    st.subheader("Data Cleaning")
     
-    /* Login container */
-    .login-container {
-        max-width: 400px;
-        margin: 100px auto;
-        padding: 40px;
-        background: white;
-        border-radius: 20px;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-        text-align: center;
-    }
+    # Cek missing values
+    st.write("### Missing Values sebelum Cleaning:")
+    missing_values = df_clean.isnull().sum()
+    st.write(missing_values[missing_values > 0])
     
-    /* Dashboard card */
-    .dashboard-card {
-        background: white;
-        padding: 25px;
-        border-radius: 15px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.08);
-        margin: 15px 0;
-        border-left: 5px solid;
-    }
+    # Isi missing values dengan mode untuk kategorikal dan median untuk numerik
+    for col in df_clean.columns:
+        if df_clean[col].dtype == 'object':
+            df_clean[col].fillna(df_clean[col].mode()[0] if not df_clean[col].mode().empty else "Tidak Diketahui", inplace=True)
+        else:
+            df_clean[col].fillna(df_clean[col].median(), inplace=True)
     
-    .card-aman { border-left-color: #28a745; }
-    .card-teguran { border-left-color: #ffc107; }
-    .card-pengawasan { border-left-color: #dc3545; }
+    st.write("### Missing Values setelah Cleaning:")
+    st.write(df_clean.isnull().sum().sum(), "missing values tersisa")
     
-    /* Level badges */
-    .level-badge {
-        display: inline-block;
-        padding: 8px 20px;
-        border-radius: 20px;
-        color: white;
-        font-weight: bold;
-        margin: 5px;
-    }
+    # Encoding data kategorikal
+    st.subheader("Encoding Data Kategorikal")
     
-    .level-aman { background: linear-gradient(135deg, #28a745, #20c997); }
-    .level-teguran { background: linear-gradient(135deg, #ffc107, #fd7e14); }
-    .level-pengawasan { background: linear-gradient(135deg, #dc3545, #c82333); }
+    label_encoders = {}
+    df_encoded = df_clean.copy()
     
-    /* Button styling */
-    .stButton button {
-        width: 100%;
-        border-radius: 10px;
-        font-weight: bold;
-        padding: 10px;
-        transition: all 0.3s;
-    }
+    categorical_cols = df_encoded.select_dtypes(include=['object']).columns
+    for col in categorical_cols:
+        if col != 'Nama':  # Tidak encode kolom nama
+            le = LabelEncoder()
+            df_encoded[col] = le.fit_transform(df_encoded[col].astype(str))
+            label_encoders[col] = le
     
-    .stButton button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-    }
+    st.write("### Data setelah Encoding:")
+    st.write(df_encoded.head())
     
-    /* Header */
-    .main-header {
-        text-align: center;
-        background: linear-gradient(90deg, #2c3e50, #4a6491);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-size: 2.5rem;
-        margin-bottom: 30px;
-        font-weight: bold;
-    }
+    return df_clean, df_encoded, label_encoders
+
+# Fungsi untuk split data
+def split_data(df_encoded):
+    st.subheader("Split Data")
     
-    /* Menu sidebar */
-    .menu-sidebar {
-        background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
-        color: white;
-        padding: 20px;
-        height: 100vh;
-        position: fixed;
-    }
+    # Pilih target variable
+    target_options = ['Frekuensi_Penggunaan_AI', 'Tingkat_Ketergantungan_AI', 'Perform_Akademik']
+    target = st.selectbox("Pilih target variable untuk prediksi:", target_options)
     
-    /* Input fields */
-    .stTextInput input {
-        border-radius: 10px;
-        padding: 10px;
-        border: 2px solid #e0e0e0;
-    }
+    # Pilih fitur
+    feature_options = [col for col in df_encoded.columns if col not in ['Nama', target]]
+    selected_features = st.multiselect(
+        "Pilih fitur untuk model:",
+        feature_options,
+        default=[col for col in ['Usia', 'IPK', 'Jam_Belajar_Mingguan'] if col in feature_options]
+    )
     
-    .stTextInput input:focus {
-        border-color: #3498db;
-        box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
-    }
+    if not selected_features:
+        st.warning("Pilih minimal satu fitur!")
+        return None, None, None, None, target
     
-    /* Table styling */
-    .dataframe {
-        border-radius: 10px;
-        overflow: hidden;
-    }
+    X = df_encoded[selected_features]
+    y = df_encoded[target]
     
-    /* Alert boxes */
-    .alert-aman {
-        background: #d4edda;
-        border-left: 5px solid #28a745;
-        padding: 15px;
-        border-radius: 5px;
-        margin: 10px 0;
-    }
+    # Split data
+    test_size = st.slider("Ukuran data testing (%):", 10, 40, 20) / 100
+    random_state = st.number_input("Random state:", min_value=0, value=42)
     
-    .alert-teguran {
-        background: #fff3cd;
-        border-left: 5px solid #ffc107;
-        padding: 15px;
-        border-radius: 5px;
-        margin: 10px 0;
-    }
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state, stratify=y
+    )
     
-    .alert-pengawasan {
-        background: #f8d7da;
-        border-left: 5px solid #dc3545;
-        padding: 15px;
-        border-radius: 5px;
-        margin: 10px 0;
-    }
+    st.write(f"### Dimensi Data:")
+    st.write(f"- Data training: {X_train.shape[0]} sampel, {X_train.shape[1]} fitur")
+    st.write(f"- Data testing: {X_test.shape[0]} sampel")
     
-    /* Hide Streamlit branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+    return X_train, X_test, y_train, y_test, target, selected_features
+
+# Fungsi untuk training model Random Forest
+def train_random_forest(X_train, X_test, y_train, y_test, target):
+    st.subheader("Training Model Random Forest")
     
-    /* Responsive design */
-    @media (max-width: 768px) {
-        .login-container {
-            margin: 50px 20px;
-            padding: 30px 20px;
+    # Parameter model
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        n_estimators = st.slider("Jumlah estimator:", 10, 200, 100)
+    with col2:
+        max_depth = st.slider("Max depth:", 2, 20, 10)
+    with col3:
+        min_samples_split = st.slider("Min samples split:", 2, 10, 2)
+    
+    # Training model
+    model = RandomForestClassifier(
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        min_samples_split=min_samples_split,
+        random_state=42
+    )
+    
+    model.fit(X_train, y_train)
+    
+    # Prediksi
+    y_pred = model.predict(X_test)
+    y_pred_train = model.predict(X_train)
+    
+    # Evaluasi
+    accuracy_test = accuracy_score(y_test, y_pred)
+    accuracy_train = accuracy_score(y_train, y_pred_train)
+    
+    st.write("### Hasil Evaluasi Model:")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Akurasi Training", f"{accuracy_train:.2%}")
+    with col2:
+        st.metric("Akurasi Testing", f"{accuracy_test:.2%}")
+    
+    # Classification report
+    st.write("### Classification Report:")
+    report = classification_report(y_test, y_pred, output_dict=True)
+    report_df = pd.DataFrame(report).transpose()
+    st.dataframe(report_df)
+    
+    # Confusion matrix
+    st.write("### Confusion Matrix:")
+    cm = confusion_matrix(y_test, y_pred)
+    
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax)
+    ax.set_xlabel('Predicted')
+    ax.set_ylabel('Actual')
+    ax.set_title('Confusion Matrix')
+    st.pyplot(fig)
+    
+    # Feature importance
+    st.write("### Feature Importance:")
+    feature_importance = pd.DataFrame({
+        'feature': X_train.columns,
+        'importance': model.feature_importances_
+    }).sort_values('importance', ascending=False)
+    
+    fig2, ax2 = plt.subplots(figsize=(10, 6))
+    sns.barplot(data=feature_importance, x='importance', y='feature', ax=ax2)
+    ax2.set_title('Feature Importance')
+    st.pyplot(fig2)
+    
+    return model, y_pred, accuracy_test
+
+# Fungsi untuk menghasilkan rekomendasi
+def generate_recommendations(prediction, target):
+    recommendations = {
+        'Rendah': {
+            'Frekuensi_Penggunaan_AI': "**LEVEL AMAN** - Penggunaan AI masih dalam batas wajar. Pertahankan dan gunakan AI secara bijak untuk meningkatkan produktivitas.",
+            'Tingkat_Ketergantungan_AI': "**LEVEL AMAN** - Ketergantungan pada AI masih rendah. Pertahankan keseimbangan antara penggunaan AI dan kemampuan pribadi.",
+            'Perform_Akademik': "**PERHATIAN** - Performa akademik rendah. Disarankan untuk meningkatkan jam belajar dan memanfaatkan AI sebagai alat bantu belajar."
+        },
+        'Sedang': {
+            'Frekuensi_Penggunaan_AI': "**PERLU TEGURAN** - Penggunaan AI sudah mulai sering. Evaluasi kembali kebutuhan penggunaan AI dan pastikan tidak mengurangi kemampuan analisis mandiri.",
+            'Tingkat_Ketergantungan_AI': "**PERLU TEGURAN** - Ketergantungan pada AI sedang. Disarankan untuk mengurangi ketergantungan dan mengembangkan kemampuan problem-solving mandiri.",
+            'Perform_Akademik': "**CUKUP BAIK** - Performa akademik sedang. Pertahankan dan coba optimalkan dengan strategi belajar yang lebih efektif."
+        },
+        'Tinggi': {
+            'Frekuensi_Penggunaan_AI': "**BUTUH PENGAWASAN LEBIH** - Penggunaan AI sangat tinggi. Perlu evaluasi menyeluruh dan batasi penggunaan AI agar tidak mengganggu pengembangan kemampuan kritis.",
+            'Tingkat_Ketergantungan_AI': "**BUTUH PENGAWASAN LEBIH** - Ketergantungan pada AI sangat tinggi. Sangat disarankan untuk konsultasi dengan dosen pembimbing dan mengurangi ketergantungan secara bertahap.",
+            'Perform_Akademik': "**SANGAT BAIK** - Performa akademik tinggi. Pertahankan prestasi dan gunakan AI sebagai alat pendukung, bukan pengganti kemampuan kognitif."
         }
-        .main-header {
-            font-size: 2rem;
-        }
     }
-</style>
-""", unsafe_allow_html=True)
-
-# ========== SISTEM LOGIN ==========
-
-# Data user (username: password_hash)
-users_db = {
-    "guru": {
-        "password": hashlib.sha256("guru123".encode()).hexdigest(),
-        "role": "guru",
-        "nama": "Guru Pembimbing"
-    },
-    "siswa": {
-        "password": hashlib.sha256("siswa123".encode()).hexdigest(),
-        "role": "siswa",
-        "nama": "Mahasiswa"
-    },
-    "admin": {
-        "password": hashlib.sha256("admin123".encode()).hexdigest(),
-        "role": "guru",
-        "nama": "Administrator"
-    }
-}
-
-def initialize_session_state():
-    """Initialize session state variables"""
-    if 'logged_in' not in st.session_state:
-        st.session_state.logged_in = False
-    if 'username' not in st.session_state:
-        st.session_state.username = ""
-    if 'role' not in st.session_state:
-        st.session_state.role = ""
-    if 'nama' not in st.session_state:
-        st.session_state.nama = ""
-    if 'current_page' not in st.session_state:
-        st.session_state.current_page = "login"
-
-def login():
-    """Tampilkan halaman login"""
-    st.markdown('<div class="login-container">', unsafe_allow_html=True)
     
-    st.markdown('<h1 style="text-align: center; color: #2c3e50;">🎓</h1>', unsafe_allow_html=True)
-    st.markdown('<h2 style="text-align: center; color: #2c3e50;">Sistem Analisis AI Mahasiswa</h2>', unsafe_allow_html=True)
-    st.markdown('<p style="text-align: center; color: #7f8c8d;">Silakan login untuk melanjutkan</p>', unsafe_allow_html=True)
+    # Mapping untuk kategori numerik ke string
+    if isinstance(prediction, (int, np.integer)):
+        if prediction == 0:
+            prediction_str = 'Rendah'
+        elif prediction == 1:
+            prediction_str = 'Sedang'
+        elif prediction == 2:
+            prediction_str = 'Tinggi'
+        else:
+            prediction_str = 'Sedang'  # default
+    else:
+        prediction_str = prediction
     
-    # Form login
-    username = st.text_input("👤 Username", placeholder="Masukkan username")
-    password = st.text_input("🔒 Password", type="password", placeholder="Masukkan password")
+    return recommendations.get(prediction_str, {}).get(target, "Rekomendasi tidak tersedia.")
+
+# Halaman Login
+def login_page():
+    st.title("🎓 Sistem Analisis Penggunaan AI - Performa Akademik")
+    st.markdown("---")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        login_button = st.button("🚀 Login", use_container_width=True)
+        st.image("https://cdn.pixabay.com/photo/2017/08/01/00/38/man-2562325_1280.jpg", use_column_width=True)
     
-    if login_button:
-        if username and password:
-            if username in users_db:
-                password_hash = hashlib.sha256(password.encode()).hexdigest()
-                if users_db[username]["password"] == password_hash:
-                    # Login berhasil
-                    st.session_state.logged_in = True
-                    st.session_state.username = username
-                    st.session_state.role = users_db[username]["role"]
-                    st.session_state.nama = users_db[username]["nama"]
-                    st.session_state.current_page = "dashboard"
-                    
-                    # Tampilkan pesan sukses
-                    success_msg = st.success(f"✅ Login berhasil! Selamat datang, {st.session_state.nama}")
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.error("❌ Password salah!")
+    st.markdown("### Login ke Sistem")
+    
+    login_type = st.radio("Login sebagai:", ["Guru/Admin", "Mahasiswa"])
+    
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    
+    if st.button("Login"):
+        if login_type == "Guru/Admin":
+            if username == "guru" and password == "guru123":
+                st.session_state.logged_in = True
+                st.session_state.user_type = "guru"
+                st.success("Login berhasil! Mengarahkan ke dashboard...")
+                st.rerun()
             else:
-                st.error("❌ Username tidak ditemukan!")
-        else:
-            st.warning("⚠️ Harap isi username dan password!")
+                st.error("Username atau password salah untuk akun guru!")
+        else:  # Mahasiswa
+            if username and password == "mahasiswa123":
+                st.session_state.logged_in = True
+                st.session_state.user_type = "mahasiswa"
+                st.session_state.student_name = username
+                st.success(f"Login berhasil! Selamat datang {username}")
+                st.rerun()
+            else:
+                st.error("Password harus 'mahasiswa123' untuk akun mahasiswa!")
     
     # Info login
-    st.markdown("---")
-    st.markdown("**Informasi Login:**")
-    st.markdown("""
-    - **Guru/Dosen:** `guru` / `guru123`
-    - **Mahasiswa:** `siswa` / `siswa123`
-    - **Admin:** `admin` / `admin123`
+    st.info("""
+    **Credential Login:**
+    - Guru/Admin: Username: `guru`, Password: `guru123`
+    - Mahasiswa: Username: `Nama Anda`, Password: `mahasiswa123`
     """)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
 
-def logout():
-    """Logout user"""
-    st.session_state.logged_in = False
-    st.session_state.username = ""
-    st.session_state.role = ""
-    st.session_state.nama = ""
-    st.session_state.current_page = "login"
-    st.rerun()
-
-# ========== FUNGSI DATA ==========
-
-def create_dataset():
-    """Buat dataset contoh"""
-    np.random.seed(42)
-    
-    data = {
-        'NIM': [f'202300{i:03d}' for i in range(1, 101)],
-        'Nama': [f'Mahasiswa {i}' for i in range(1, 101)],
-        'Jurusan': np.random.choice(['Informatika', 'Sistem Informasi', 'Teknik Komputer', 'Data Science'], 100),
-        'Semester': np.random.choice([3, 4, 5, 6, 7, 8], 100),
-        'Jam_AI_Per_Minggu': np.round(np.random.uniform(5, 40, 100), 1),
-        'IPK': np.round(np.random.uniform(2.0, 4.0, 100), 2),
-        'Frekuensi_Penggunaan': np.random.choice(['Sangat Jarang', 'Jarang', 'Cukup', 'Sering', 'Sangat Sering'], 100),
-        'Tingkat_Kemahiran': np.random.choice(['Pemula', 'Menengah', 'Mahir'], 100),
-    }
-    
-    df = pd.DataFrame(data)
-    
-    # Tambahkan kolom Level berdasarkan jam penggunaan
-    def get_level(jam):
-        if jam <= 10:
-            return 'AMAN'
-        elif jam <= 20:
-            return 'PERLU TEGURAN'
-        else:
-            return 'BUTUH PENGAWASAN'
-    
-    df['Level'] = df['Jam_AI_Per_Minggu'].apply(get_level)
-    
-    return df
-
-# ========== DASHBOARD GURU ==========
-
-def dashboard_guru():
-    """Dashboard untuk guru/dosen"""
-    # Sidebar menu
-    with st.sidebar:
-        st.markdown(f"### 👋 Halo, {st.session_state.nama}")
-        st.markdown("---")
-        
-        menu = st.radio(
-            "📋 Menu",
-            ["📊 Dashboard Utama", "👥 Data Mahasiswa", "🔧 Preprocessing", "📈 Analisis", "💡 Rekomendasi", "⚙️ Pengaturan"]
-        )
-        
-        st.markdown("---")
-        if st.button("🚪 Logout", use_container_width=True):
-            logout()
-    
-    # Konten utama berdasarkan menu
-    if menu == "📊 Dashboard Utama":
-        show_guru_dashboard()
-    elif menu == "👥 Data Mahasiswa":
-        show_guru_data()
-    elif menu == "🔧 Preprocessing":
-        show_guru_preprocessing()
-    elif menu == "📈 Analisis":
-        show_guru_analysis()
-    elif menu == "💡 Rekomendasi":
-        show_guru_recommendations()
-    elif menu == "⚙️ Pengaturan":
-        show_guru_settings()
-
-def show_guru_dashboard():
-    """Dashboard utama guru"""
-    st.markdown('<h1 class="main-header">📊 DASHBOARD GURU</h1>', unsafe_allow_html=True)
-    
-    # Load data
-    df = create_dataset()
-    
-    # Statistik ringkas
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Total Mahasiswa", len(df))
-    
-    with col2:
-        avg_hours = df['Jam_AI_Per_Minggu'].mean()
-        st.metric("Rata-rata Jam AI", f"{avg_hours:.1f} jam/minggu")
-    
-    with col3:
-        avg_ipk = df['IPK'].mean()
-        st.metric("Rata-rata IPK", f"{avg_ipk:.2f}")
-    
-    with col4:
-        high_risk = len(df[df['Level'] == 'BUTUH PENGAWASAN'])
-        st.metric("Butuh Pengawasan", f"{high_risk} siswa")
-    
-    # Ringkasan level
-    st.markdown("### 📋 Ringkasan Level Pengawasan")
-    
-    level_counts = df['Level'].value_counts()
-    
-    col1, col2, col3 = st.columns(3)
-    
-    level_colors = {
-        'AMAN': '#28a745',
-        'PERLU TEGURAN': '#ffc107',
-        'BUTUH PENGAWASAN': '#dc3545'
-    }
-    
-    for level, count in level_counts.items():
-        if level == 'AMAN':
-            with col1:
-                st.markdown(f'<div class="dashboard-card card-aman">', unsafe_allow_html=True)
-                st.markdown(f'<h3>✅ {level}</h3>', unsafe_allow_html=True)
-                st.markdown(f'<h2>{count} Siswa</h2>', unsafe_allow_html=True)
-                st.markdown(f'<p>{count/len(df)*100:.1f}% dari total</p>', unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-        elif level == 'PERLU TEGURAN':
-            with col2:
-                st.markdown(f'<div class="dashboard-card card-teguran">', unsafe_allow_html=True)
-                st.markdown(f'<h3>⚠️ {level}</h3>', unsafe_allow_html=True)
-                st.markdown(f'<h2>{count} Siswa</h2>', unsafe_allow_html=True)
-                st.markdown(f'<p>{count/len(df)*100:.1f}% dari total</p>', unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            with col3:
-                st.markdown(f'<div class="dashboard-card card-pengawasan">', unsafe_allow_html=True)
-                st.markdown(f'<h3>🚨 {level}</h3>', unsafe_allow_html=True)
-                st.markdown(f'<h2>{count} Siswa</h2>', unsafe_allow_html=True)
-                st.markdown(f'<p>{count/len(df)*100:.1f}% dari total</p>', unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Grafik sederhana
-    st.markdown("### 📈 Distribusi Penggunaan AI")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Histogram jam penggunaan
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
-        ax.hist(df['Jam_AI_Per_Minggu'], bins=20, color='steelblue', edgecolor='black')
-        ax.axvline(x=10, color='green', linestyle='--', label='Batas Aman')
-        ax.axvline(x=20, color='orange', linestyle='--', label='Batas Teguran')
-        ax.set_xlabel('Jam AI per Minggu')
-        ax.set_ylabel('Jumlah Mahasiswa')
-        ax.set_title('Distribusi Jam Penggunaan AI')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        st.pyplot(fig)
-    
-    with col2:
-        # Scatter plot hubungan AI-IPK
-        fig, ax = plt.subplots()
-        
-        # Warna berdasarkan level
-        colors = {'AMAN': 'green', 'PERLU TEGURAN': 'orange', 'BUTUH PENGAWASAN': 'red'}
-        
-        for level in df['Level'].unique():
-            subset = df[df['Level'] == level]
-            ax.scatter(subset['Jam_AI_Per_Minggu'], subset['IPK'], 
-                      label=level, alpha=0.6, color=colors[level])
-        
-        ax.set_xlabel('Jam AI per Minggu')
-        ax.set_ylabel('IPK')
-        ax.set_title('Hubungan Penggunaan AI dengan IPK')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
-        st.pyplot(fig)
-
-def show_guru_data():
-    """Tampilkan data mahasiswa"""
-    st.markdown('<h1 class="main-header">👥 DATA MAHASISWA</h1>', unsafe_allow_html=True)
-    
-    df = create_dataset()
-    
-    # Filter dan pencarian
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        filter_jurusan = st.multiselect(
-            "Filter Jurusan",
-            options=df['Jurusan'].unique(),
-            default=df['Jurusan'].unique()
-        )
-    
-    with col2:
-        filter_level = st.multiselect(
-            "Filter Level",
-            options=df['Level'].unique(),
-            default=df['Level'].unique()
-        )
-    
-    with col3:
-        search = st.text_input("🔍 Cari Nama/NIM")
-    
-    # Terapkan filter
-    filtered_df = df.copy()
-    if filter_jurusan:
-        filtered_df = filtered_df[filtered_df['Jurusan'].isin(filter_jurusan)]
-    if filter_level:
-        filtered_df = filtered_df[filtered_df['Level'].isin(filter_level)]
-    if search:
-        filtered_df = filtered_df[
-            filtered_df['Nama'].str.contains(search, case=False) | 
-            filtered_df['NIM'].str.contains(search, case=False)
-        ]
-    
-    # Tampilkan data
-    st.write(f"**Menampilkan {len(filtered_df)} dari {len(df)} mahasiswa**")
-    st.dataframe(filtered_df, use_container_width=True, height=400)
-    
-    # Opsi ekspor
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📥 Download Data (CSV)"):
-            csv = filtered_df.to_csv(index=False)
-            st.download_button(
-                label="Klik untuk download",
-                data=csv,
-                file_name="data_mahasiswa.csv",
-                mime="text/csv"
-            )
-    
-    with col2:
-        if st.button("🔄 Refresh Data"):
-            st.rerun()
-
-def show_guru_preprocessing():
-    """Preprocessing data"""
-    st.markdown('<h1 class="main-header">🔧 PREPROCESSING DATA</h1>', unsafe_allow_html=True)
-    
-    df = create_dataset()
-    
-    tab1, tab2, tab3 = st.tabs(["🧹 Data Cleaning", "🔢 Encoding", "✂️ Split Data"])
-    
-    with tab1:
-        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-        st.subheader("Data Cleaning")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("Cek Missing Values"):
-                missing = df.isnull().sum()
-                if missing.sum() == 0:
-                    st.success("✅ Tidak ada data yang hilang")
-                else:
-                    st.warning(f"⚠️ Ditemukan {missing.sum()} missing values")
-                    st.write(missing[missing > 0])
-        
-        with col2:
-            if st.button("Cek Duplikat"):
-                duplicates = df.duplicated().sum()
-                if duplicates == 0:
-                    st.success("✅ Tidak ada data duplikat")
-                else:
-                    st.warning(f"⚠️ Ditemukan {duplicates} data duplikat")
-        
-        # Statistik data
-        st.subheader("Statistik Data")
-        st.dataframe(df.describe(), use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with tab2:
-        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-        st.subheader("Encoding Data Kategorikal")
-        
-        st.write("**Kolom kategorikal:**")
-        cat_cols = df.select_dtypes(include=['object']).columns.tolist()
-        cat_cols = [col for col in cat_cols if col not in ['Nama', 'NIM']]
-        
-        for col in cat_cols:
-            st.write(f"- {col}: {df[col].nunique()} nilai unik")
-        
-        if st.button("Lakukan Label Encoding"):
-            # Simple encoding untuk demo
-            df_encoded = df.copy()
-            
-            # Encoding untuk kolom tertentu
-            for col in cat_cols:
-                if col == 'Level':
-                    mapping = {'AMAN': 0, 'PERLU TEGURAN': 1, 'BUTUH PENGAWASAN': 2}
-                    df_encoded[col] = df_encoded[col].map(mapping)
-                else:
-                    # Label encoding sederhana
-                    unique_vals = df_encoded[col].unique()
-                    mapping = {val: i for i, val in enumerate(unique_vals)}
-                    df_encoded[col] = df_encoded[col].map(mapping)
-            
-            st.success("✅ Encoding berhasil!")
-            st.dataframe(df_encoded.head(), use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with tab3:
-        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-        st.subheader("Split Data")
-        
-        test_size = st.slider("Persentase Data Testing", 10, 40, 20)
-        
-        if st.button("Split Data"):
-            train_size = 100 - test_size
-            st.success(f"✅ Data berhasil di-split!")
-            st.write(f"**Data Training:** {train_size}% ({int(len(df)*train_size/100)} sampel)")
-            st.write(f"**Data Testing:** {test_size}% ({int(len(df)*test_size/100)} sampel)")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-def show_guru_analysis():
-    """Analisis data"""
-    st.markdown('<h1 class="main-header">📈 ANALISIS DATA</h1>', unsafe_allow_html=True)
-    
-    df = create_dataset()
-    
-    tab1, tab2, tab3 = st.tabs(["Analisis Deskriptif", "Analisis Korelasi", "Analisis Trend"])
-    
-    with tab1:
-        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-        st.subheader("Analisis Deskriptif per Level")
-        
-        # Group by level
-        level_stats = df.groupby('Level').agg({
-            'Jam_AI_Per_Minggu': ['mean', 'min', 'max', 'std'],
-            'IPK': ['mean', 'min', 'max', 'std'],
-            'NIM': 'count'
-        }).round(2)
-        
-        level_stats.columns = ['Rata2_Jam', 'Min_Jam', 'Max_Jam', 'Std_Jam', 
-                              'Rata2_IPK', 'Min_IPK', 'Max_IPK', 'Std_IPK', 'Jumlah']
-        
-        st.dataframe(level_stats, use_container_width=True)
-        
-        # Insights
-        st.subheader("📌 Insights:")
-        
-        # Hitung korelasi
-        correlation = df['Jam_AI_Per_Minggu'].corr(df['IPK'])
-        
-        if correlation < -0.3:
-            st.warning("⚠️ Korelasi negatif kuat terdeteksi antara penggunaan AI dan IPK")
-            st.write("Semakin banyak menggunakan AI, IPK cenderung menurun")
-        elif correlation < 0:
-            st.info("ℹ️ Korelasi negatif lemah terdeteksi")
-        elif correlation < 0.3:
-            st.info("ℹ️ Korelasi positif lemah terdeteksi")
-        else:
-            st.success("✅ Korelasi positif kuat terdeteksi")
-        
-        st.write(f"**Koefisien Korelasi:** {correlation:.3f}")
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with tab2:
-        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-        st.subheader("Analisis Korelasi")
-        
-        # Matrix korelasi sederhana
-        numeric_df = df[['Jam_AI_Per_Minggu', 'IPK', 'Semester']]
-        corr_matrix = numeric_df.corr()
-        
-        st.write("**Matriks Korelasi:**")
-        st.dataframe(corr_matrix, use_container_width=True)
-        
-        # Interpretasi
-        st.subheader("Interpretasi:")
-        st.write("""
-        1. **Korelasi Jam_AI - IPK**: Nilai negatif menunjukkan penggunaan AI berlebihan berkaitan dengan IPK rendah
-        2. **Korelasi Semester - IPK**: Biasanya positif karena pengalaman belajar
-        3. **Korelasi Semester - Jam_AI**: Bisa positif karena mahasiswa senior lebih sering menggunakan AI
-        """)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with tab3:
-        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-        st.subheader("Analisis Trend per Jurusan")
-        
-        # Group by jurusan
-        jurusan_stats = df.groupby('Jurusan').agg({
-            'Jam_AI_Per_Minggu': 'mean',
-            'IPK': 'mean',
-            'Level': lambda x: (x == 'BUTUH PENGAWASAN').mean() * 100
-        }).round(2)
-        
-        jurusan_stats.columns = ['Rata2_Jam_AI', 'Rata2_IPK', '%_Butuh_Pengawasan']
-        
-        st.dataframe(jurusan_stats, use_container_width=True)
-        
-        # Ranking jurusan
-        st.subheader("Ranking Jurusan:")
-        
-        # Berdasarkan penggunaan AI
-        sorted_by_ai = jurusan_stats.sort_values('Rata2_Jam_AI', ascending=False)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write("**Peringkat Penggunaan AI Tertinggi:**")
-            for i, (jurusan, row) in enumerate(sorted_by_ai.iterrows(), 1):
-                st.write(f"{i}. {jurusan}: {row['Rata2_Jam_AI']} jam/minggu")
-        
-        with col2:
-            st.write("**Peringkat IPK Tertinggi:**")
-            sorted_by_ipk = jurusan_stats.sort_values('Rata2_IPK', ascending=False)
-            for i, (jurusan, row) in enumerate(sorted_by_ipk.iterrows(), 1):
-                st.write(f"{i}. {jurusan}: IPK {row['Rata2_IPK']}")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-
-def show_guru_recommendations():
-    """Rekomendasi untuk guru"""
-    st.markdown('<h1 class="main-header">💡 REKOMENDASI PENGAWASAN</h1>', unsafe_allow_html=True)
-    
-    df = create_dataset()
-    
-    # Statistik level
-    level_counts = df['Level'].value_counts()
-    
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-    st.subheader("📊 Distribusi Siswa yang Perlu Perhatian")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric("Butuh Pengawasan", f"{level_counts.get('BUTUH PENGAWASAN', 0)} siswa")
-    with col2:
-        st.metric("Perlu Teguran", f"{level_counts.get('PERLU TEGURAN', 0)} siswa")
-    with col3:
-        st.metric("Aman", f"{level_counts.get('AMAN', 0)} siswa")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Rekomendasi berdasarkan level
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-    st.subheader("🎯 Rekomendasi Tindakan per Level")
-    
-    tab1, tab2, tab3 = st.tabs(["🚨 BUTUH PENGAWASAN", "⚠️ PERLU TEGURAN", "✅ AMAN"])
-    
-    with tab1:
-        st.markdown('<div class="alert-pengawasan">', unsafe_allow_html=True)
-        st.markdown("### 🚨 LEVEL: BUTUH PENGAWASAN")
-        st.write(f"**Jumlah:** {level_counts.get('BUTUH PENGAWASAN', 0)} siswa")
-        st.write("**Rekomendasi Tindakan:**")
-        st.write("""
-        1. **Intervensi Langsung**: Panggil mahasiswa untuk konseling wajib
-        2. **Pemantauan Ketat**: Pantau penggunaan AI mingguan
-        3. **Program Khusus**: Berikan tugas yang mengurangi ketergantungan AI
-        4. **Kerjasama Orang Tua**: Informasikan kondisi kepada orang tua/wali
-        5. **Evaluasi Berkala**: Evaluasi perkembangan setiap 2 minggu
-        """)
-        
-        # Tampilkan siswa dengan level ini
-        if level_counts.get('BUTUH PENGAWASAN', 0) > 0:
-            students = df[df['Level'] == 'BUTUH PENGAWASAN'][['Nama', 'NIM', 'Jurusan', 'Jam_AI_Per_Minggu', 'IPK']]
-            st.write("**Daftar Siswa:**")
-            st.dataframe(students, use_container_width=True, height=200)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with tab2:
-        st.markdown('<div class="alert-teguran">', unsafe_allow_html=True)
-        st.markdown("### ⚠️ LEVEL: PERLU TEGURAN")
-        st.write(f"**Jumlah:** {level_counts.get('PERLU TEGURAN', 0)} siswa")
-        st.write("**Rekomendasi Tindakan:**")
-        st.write("""
-        1. **Peringatan Tertulis**: Berikan surat peringatan pertama
-        2. **Konseling Ringan**: Undang untuk diskusi informal
-        3. **Pembatasan**: Sarankan batas maksimal 15 jam/minggu
-        4. **Mentoring**: Pasangkan dengan senior sebagai mentor
-        5. **Monitoring**: Pantau perkembangan bulanan
-        """)
-        
-        if level_counts.get('PERLU TEGURAN', 0) > 0:
-            students = df[df['Level'] == 'PERLU TEGURAN'][['Nama', 'NIM', 'Jurusan', 'Jam_AI_Per_Minggu', 'IPK']]
-            st.write("**Daftar Siswa:**")
-            st.dataframe(students, use_container_width=True, height=200)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with tab3:
-        st.markdown('<div class="alert-aman">', unsafe_allow_html=True)
-        st.markdown("### ✅ LEVEL: AMAN")
-        st.write(f"**Jumlah:** {level_counts.get('AMAN', 0)} siswa")
-        st.write("**Rekomendasi Tindakan:**")
-        st.write("""
-        1. **Apresiasi**: Berikan penghargaan atas penggunaan AI yang bertanggung jawab
-        2. **Role Model**: Jadikan sebagai contoh untuk siswa lain
-        3. **Pengembangan**: Berikan akses ke tool AI yang lebih advance
-        4. **Mentoring**: Minta untuk membimbing teman yang kesulitan
-        5. **Pemantauan Ringan**: Evaluasi triwulanan cukup
-        """)
-        
-        if level_counts.get('AMAN', 0) > 0:
-            students = df[df['Level'] == 'AMAN'][['Nama', 'NIM', 'Jurusan', 'Jam_AI_Per_Minggu', 'IPK']]
-            st.write("**Daftar Siswa (contoh 5 siswa):**")
-            st.dataframe(students.head(), use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Rekomendasi umum
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-    st.subheader("📋 Rekomendasi Kebijakan Umum")
-    
-    st.write("""
-    **Untuk Institusi:**
-    1. **Kebijakan Penggunaan AI**: Buat panduan resmi penggunaan AI dalam akademik
-    2. **Workshop Edukasi**: Adakan workshop tentang penggunaan AI yang sehat
-    3. **Layanan Konseling**: Sediakan layanan konseling khusus untuk masalah ketergantungan AI
-    4. **Monitoring System**: Implementasi sistem monitoring penggunaan AI yang lebih baik
-    5. **Kolaborasi dengan Perusahaan AI**: Buat kemitraan untuk tool yang lebih edukatif
-    
-    **Untuk Dosen:**
-    1. **Penugasan yang Seimbang**: Rancang tugas yang membutuhkan pemikiran kritis, bukan hanya pencarian jawaban
-    2. **Edukasi tentang Plagiarisme**: Jelaskan batasan penggunaan AI dalam akademik
-    3. **Feedback Rutin**: Berikan feedback berkala tentang penggunaan AI
-    4. **Alternatif Pembelajaran**: Sediakan metode belajar alternatif selain AI
-    """)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-def show_guru_settings():
-    """Pengaturan untuk guru"""
-    st.markdown('<h1 class="main-header">⚙️ PENGATURAN</h1>', unsafe_allow_html=True)
-    
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-    st.subheader("Informasi Akun")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("**Username:**", st.session_state.username)
-        st.write("**Nama:**", st.session_state.nama)
-        st.write("**Role:**", st.session_state.role)
-    
-    with col2:
-        st.write("**Status:**", "🟢 Aktif")
-        st.write("**Terakhir Login:**", "Hari ini")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-    st.subheader("Pengaturan Aplikasi")
-    
-    # Threshold pengawasan
-    st.write("**Atur Threshold Pengawasan:**")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        aman_threshold = st.number_input("Batas AMAN (jam/minggu)", 1, 50, 10)
-    
-    with col2:
-        teguran_threshold = st.number_input("Batas TEGURAN (jam/minggu)", 1, 50, 20)
-    
-    with col3:
-        st.write(" ")
-        st.write(" ")
-        if st.button("Simpan Threshold"):
-            st.success("✅ Threshold berhasil disimpan!")
-    
-    # Notifikasi
-    st.write("**Pengaturan Notifikasi:**")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        email_notif = st.checkbox("Email Notifikasi", value=True)
-        sms_notif = st.checkbox("SMS Notifikasi", value=False)
-    
-    with col2:
-        if st.button("Simpan Pengaturan Notifikasi"):
-            st.success("✅ Pengaturan notifikasi disimpan!")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# ========== DASHBOARD SISWA ==========
-
-def dashboard_siswa():
-    """Dashboard untuk siswa"""
-    # Sidebar menu
-    with st.sidebar:
-        st.markdown(f"### 👋 Halo, {st.session_state.nama}")
-        st.markdown("---")
-        
-        menu = st.radio(
-            "📋 Menu",
-            ["📊 Dashboard Saya", "📈 Statistik Saya", "💡 Rekomendasi", "ℹ️ Bantuan"]
-        )
-        
-        st.markdown("---")
-        if st.button("🚪 Logout", use_container_width=True):
-            logout()
-    
-    # Konten utama
-    if menu == "📊 Dashboard Saya":
-        show_siswa_dashboard()
-    elif menu == "📈 Statistik Saya":
-        show_siswa_stats()
-    elif menu == "💡 Rekomendasi":
-        show_siswa_recommendations()
-    elif menu == "ℹ️ Bantuan":
-        show_siswa_help()
-
-def show_siswa_dashboard():
-    """Dashboard utama siswa"""
-    st.markdown('<h1 class="main-header">👨‍🎓 DASHBOARD SISWA</h1>', unsafe_allow_html=True)
-    
-    # Data siswa (dummy data untuk demo)
-    student_data = {
-        'Nama': 'Mahasiswa 1',
-        'NIM': '202300001',
-        'Jurusan': 'Informatika',
-        'Semester': 5,
-        'Jam_AI_Per_Minggu': 18.5,
-        'IPK': 3.25,
-        'Frekuensi_Penggunaan': 'Sering',
-        'Tingkat_Kemahiran': 'Menengah',
-        'Level': 'PERLU TEGURAN'
-    }
-    
-    # Tampilkan profil
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-        st.subheader("👤 Profil Saya")
-        
-        st.write(f"**Nama:** {student_data['Nama']}")
-        st.write(f"**NIM:** {student_data['NIM']}")
-        st.write(f"**Jurusan:** {student_data['Jurusan']}")
-        st.write(f"**Semester:** {student_data['Semester']}")
-        st.write(f"**IPK:** {student_data['IPK']}")
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-        st.subheader("📊 Status Penggunaan AI")
-        
-        # Tampilkan level
-        level = student_data['Level']
-        if level == 'AMAN':
-            st.markdown('<span class="level-badge level-aman">✅ LEVEL AMAN</span>', unsafe_allow_html=True)
-        elif level == 'PERLU TEGURAN':
-            st.markdown('<span class="level-badge level-teguran">⚠️ PERLU TEGURAN</span>', unsafe_allow_html=True)
-        else:
-            st.markdown('<span class="level-badge level-pengawasan">🚨 BUTUH PENGAWASAN</span>', unsafe_allow_html=True)
-        
-        # Progress bar
-        jam = student_data['Jam_AI_Per_Minggu']
-        st.write(f"**Penggunaan AI:** {jam} jam/minggu")
-        
-        # Batasan: 0-40 jam
-        progress = min(jam / 40, 1.0)
-        st.progress(progress)
-        
-        # Keterangan
-        st.caption("**Keterangan Level:**")
-        st.caption("🟢 AMAN: ≤ 10 jam/minggu")
-        st.caption("🟡 TEGURAN: 11-20 jam/minggu")
-        st.caption("🔴 PENGAWASAN: > 20 jam/minggu")
-        
-        # Detail penggunaan
-        st.write("**Detail Penggunaan:**")
-        st.write(f"- Frekuensi: {student_data['Frekuensi_Penggunaan']}")
-        st.write(f"- Tingkat Kemahiran: {student_data['Tingkat_Kemahiran']}")
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Grafik penggunaan
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-    st.subheader("📈 Riwayat Penggunaan AI (Bulan Terakhir)")
-    
-    # Data dummy untuk grafik
-    months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei']
-    usage = [15, 18, 22, 18, 17]
-    
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(figsize=(10, 4))
-    
-    bars = ax.bar(months, usage, color=['green' if x <= 10 else 'orange' if x <= 20 else 'red' for x in usage])
-    ax.axhline(y=10, color='green', linestyle='--', alpha=0.5, label='Batas Aman')
-    ax.axhline(y=20, color='red', linestyle='--', alpha=0.5, label='Batas Pengawasan')
-    ax.set_xlabel('Bulan')
-    ax.set_ylabel('Jam AI per Minggu')
-    ax.set_title('Trend Penggunaan AI')
-    ax.legend()
-    
-    # Tambahkan label nilai di atas bar
-    for bar in bars:
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height + 0.5,
-                f'{int(height)}', ha='center', va='bottom', fontsize=10)
-    
-    st.pyplot(fig)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-def show_siswa_stats():
-    """Statistik siswa"""
-    st.markdown('<h1 class="main-header">📈 STATISTIK SAYA</h1>', unsafe_allow_html=True)
-    
-    # Data siswa
-    student_data = {
-        'Jam_AI_Per_Minggu': 18.5,
-        'IPK': 3.25,
-        'Level': 'PERLU TEGURAN'
-    }
-    
-    # Load data untuk perbandingan
-    df = create_dataset()
-    jurusan_siswa = 'Informatika'
-    jurusan_data = df[df['Jurusan'] == jurusan_siswa]
-    
-    # Statistik perbandingan
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        rata_jurusan = jurusan_data['Jam_AI_Per_Minggu'].mean()
-        selisih_jam = student_data['Jam_AI_Per_Minggu'] - rata_jurusan
-        st.metric(
-            "Jam AI/Minggu", 
-            f"{student_data['Jam_AI_Per_Minggu']} jam",
-            f"{selisih_jam:+.1f} dari rata jurusan"
-        )
-    
-    with col2:
-        rata_ipk_jurusan = jurusan_data['IPK'].mean()
-        selisih_ipk = student_data['IPK'] - rata_ipk_jurusan
-        st.metric(
-            "IPK",
-            f"{student_data['IPK']}",
-            f"{selisih_ipk:+.2f} dari rata jurusan"
-        )
-    
-    with col3:
-        # Hitung peringkat
-        peringkat_ipk = (df['IPK'] >= student_data['IPK']).sum() / len(df) * 100
-        st.metric(
-            "Peringkat IPK",
-            f"Top {peringkat_ipk:.0f}%",
-            f"Dari {len(df)} mahasiswa"
-        )
-    
-    # Perbandingan dengan jurusan
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-    st.subheader("📊 Perbandingan dengan Jurusan")
-    
-    # Buat tabel perbandingan
-    comparison_data = {
-        'Metrik': ['Jam AI/Minggu', 'IPK', 'Level'],
-        'Anda': [student_data['Jam_AI_Per_Minggu'], student_data['IPK'], student_data['Level']],
-        'Rata-rata Jurusan': [round(jurusan_data['Jam_AI_Per_Minggu'].mean(), 1), 
-                            round(jurusan_data['IPK'].mean(), 2),
-                            'N/A'],
-        'Status': [
-            '✅ Di bawah rata-rata' if student_data['Jam_AI_Per_Minggu'] < rata_jurusan else '⚠️ Di atas rata-rata',
-            '✅ Di atas rata-rata' if student_data['IPK'] > rata_ipk_jurusan else '⚠️ Di bawah rata-rata',
-            'Lihat rekomendasi'
-        ]
-    }
-    
-    comparison_df = pd.DataFrame(comparison_data)
-    st.dataframe(comparison_df, use_container_width=True, hide_index=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Distribusi level di jurusan
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-    st.subheader("🎯 Distribusi Level di Jurusan Anda")
-    
-    level_counts_jurusan = jurusan_data['Level'].value_counts()
-    
-    # Buat pie chart
-    fig, ax = plt.subplots()
-    colors = {'AMAN': '#28a745', 'PERLU TEGURAN': '#ffc107', 'BUTUH PENGAWASAN': '#dc3545'}
-    level_colors = [colors.get(level, '#6c757d') for level in level_counts_jurusan.index]
-    
-    wedges, texts, autotexts = ax.pie(
-        level_counts_jurusan.values, 
-        labels=level_counts_jurusan.index,
-        autopct='%1.1f%%',
-        colors=level_colors,
-        startangle=90
+# Dashboard Guru
+def guru_dashboard():
+    st.sidebar.title("🎓 Dashboard Guru")
+    st.sidebar.markdown("---")
+    
+    menu = st.sidebar.selectbox(
+        "Menu",
+        ["Data Awal", "Preprocessing & Cleaning", "Model Random Forest", "Evaluasi & Rekomendasi", "Logout"]
     )
     
-    # Highlight bagian sesuai level siswa
-    for i, level in enumerate(level_counts_jurusan.index):
-        if level == student_data['Level']:
-            wedges[i].set_edgecolor('black')
-            wedges[i].set_linewidth(2)
+    if menu == "Logout":
+        st.session_state.logged_in = False
+        st.session_state.user_type = None
+        st.rerun()
     
-    ax.set_title(f'Distribusi Level di Jurusan {jurusan_siswa}')
-    st.pyplot(fig)
+    st.title("📊 Dashboard Analisis - Guru/Admin")
+    st.markdown("---")
     
-    # Tampilkan posisi siswa
-    st.write(f"**Posisi Anda:** Termasuk dalam kategori **{student_data['Level']}**")
-    st.write(f"**Jumlah mahasiswa {student_data['Level']} di jurusan Anda:** {level_counts_jurusan.get(student_data['Level'], 0)} orang")
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Inisialisasi session state untuk data
+    if 'df' not in st.session_state:
+        st.session_state.df = create_sample_dataset()
+    
+    if 'df_clean' not in st.session_state:
+        st.session_state.df_clean = None
+    
+    if 'df_encoded' not in st.session_state:
+        st.session_state.df_encoded = None
+    
+    if 'model' not in st.session_state:
+        st.session_state.model = None
+    
+    if 'predictions' not in st.session_state:
+        st.session_state.predictions = None
+    
+    if 'target' not in st.session_state:
+        st.session_state.target = None
+    
+    # Menu Data Awal
+    if menu == "Data Awal":
+        st.header("Data Awal Dataset")
+        
+        # Upload atau gunakan dataset contoh
+        st.subheader("Upload Dataset atau Gunakan Data Contoh")
+        
+        uploaded_file = st.file_uploader("Upload file CSV dataset", type=['csv'])
+        
+        if uploaded_file is not None:
+            st.session_state.df = pd.read_csv(uploaded_file)
+            st.success("Dataset berhasil diupload!")
+        else:
+            st.info("Menggunakan dataset contoh. Silakan upload dataset CSV jika ingin menggunakan data sendiri.")
+        
+        # Tampilkan data
+        st.subheader("Preview Dataset")
+        st.write(f"Shape dataset: {st.session_state.df.shape}")
+        st.dataframe(st.session_state.df.head(10))
+        
+        # Statistik deskriptif
+        st.subheader("Statistik Deskriptif")
+        st.write(st.session_state.df.describe())
+        
+        # Distribusi target
+        st.subheader("Distribusi Variabel Target")
+        
+        target_options = ['Frekuensi_Penggunaan_AI', 'Tingkat_Ketergantungan_AI', 'Perform_Akademik']
+        target_to_analyze = st.selectbox("Pilih variabel untuk dianalisis:", target_options)
+        
+        if target_to_analyze in st.session_state.df.columns:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            st.session_state.df[target_to_analyze].value_counts().plot(kind='bar', ax=ax)
+            ax.set_title(f'Distribusi {target_to_analyze}')
+            ax.set_xlabel(target_to_analyze)
+            ax.set_ylabel('Jumlah')
+            st.pyplot(fig)
+    
+    # Menu Preprocessing & Cleaning
+    elif menu == "Preprocessing & Cleaning":
+        st.header("Preprocessing & Data Cleaning")
+        
+        if st.session_state.df is not None:
+            # Preprocessing data
+            df_clean, df_encoded, label_encoders = preprocess_data(st.session_state.df)
+            
+            # Simpan ke session state
+            st.session_state.df_clean = df_clean
+            st.session_state.df_encoded = df_encoded
+            st.session_state.label_encoders = label_encoders
+            
+            # Tampilkan perbandingan sebelum dan sesudah
+            st.subheader("Perbandingan Sebelum dan Sesudah Preprocessing")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("**Data Asli (5 baris pertama):**")
+                st.write(st.session_state.df.head())
+            with col2:
+                st.write("**Data Setelah Cleaning (5 baris pertama):**")
+                st.write(df_clean.head())
+            
+            # Informasi encoding
+            if label_encoders:
+                st.subheader("Mapping Encoding")
+                for col, le in label_encoders.items():
+                    st.write(f"**{col}:**")
+                    classes = le.classes_
+                    for i, cls in enumerate(classes):
+                        st.write(f"  {cls} → {i}")
+        else:
+            st.warning("Silakan upload atau gunakan dataset terlebih dahulu di menu 'Data Awal'")
+    
+    # Menu Model Random Forest
+    elif menu == "Model Random Forest":
+        st.header("Uji Model Random Forest")
+        
+        if st.session_state.df_encoded is not None:
+            # Split data
+            X_train, X_test, y_train, y_test, target, selected_features = split_data(st.session_state.df_encoded)
+            
+            if X_train is not None:
+                st.session_state.target = target
+                st.session_state.selected_features = selected_features
+                
+                # Training model
+                if st.button("Train Model Random Forest"):
+                    with st.spinner("Training model..."):
+                        model, predictions, accuracy = train_random_forest(X_train, X_test, y_train, y_test, target)
+                        
+                        # Simpan model dan hasil prediksi
+                        st.session_state.model = model
+                        st.session_state.X_test = X_test
+                        st.session_state.y_test = y_test
+                        st.session_state.predictions = predictions
+                        st.session_state.accuracy = accuracy
+                        
+                        # Simpan prediksi untuk setiap mahasiswa
+                        df_results = st.session_state.df_clean.copy()
+                        # Ambil indeks untuk data testing
+                        test_indices = X_test.index
+                        
+                        # Buat kolom prediksi
+                        df_results['Prediksi'] = ''
+                        df_results['Rekomendasi'] = ''
+                        
+                        for i, idx in enumerate(test_indices):
+                            if i < len(predictions):
+                                df_results.loc[idx, 'Prediksi'] = predictions[i]
+                                df_results.loc[idx, 'Rekomendasi'] = generate_recommendations(predictions[i], target)
+                        
+                        st.session_state.df_results = df_results
+                        
+                        st.success("Model berhasil ditraining!")
+        else:
+            st.warning("Silakan lakukan preprocessing data terlebih dahulu di menu 'Preprocessing & Cleaning'")
+    
+    # Menu Evaluasi & Rekomendasi
+    elif menu == "Evaluasi & Rekomendasi":
+        st.header("Evaluasi & Rekomendasi")
+        
+        if st.session_state.model is not None and st.session_state.df_results is not None:
+            st.subheader("Hasil Prediksi dan Rekomendasi")
+            
+            # Tampilkan akurasi
+            st.metric("Akurasi Model", f"{st.session_state.accuracy:.2%}")
+            
+            # Filter berdasarkan prediksi
+            st.subheader("Filter Berdasarkan Tingkat Prediksi")
+            
+            # Mapping prediksi numerik ke label
+            if st.session_state.target in st.session_state.label_encoders:
+                le = st.session_state.label_encoders[st.session_state.target]
+                pred_mapping = {i: label for i, label in enumerate(le.classes_)}
+            else:
+                pred_mapping = {0: 'Rendah', 1: 'Sedang', 2: 'Tinggi'}
+            
+            pred_filter = st.selectbox(
+                "Pilih tingkat prediksi:",
+                ["Semua"] + list(pred_mapping.values())
+            )
+            
+            # Filter data
+            if pred_filter == "Semua":
+                filtered_df = st.session_state.df_results[st.session_state.df_results['Prediksi'] != '']
+            else:
+                # Cari key yang sesuai dengan label
+                pred_key = [k for k, v in pred_mapping.items() if v == pred_filter]
+                if pred_key:
+                    filtered_df = st.session_state.df_results[st.session_state.df_results['Prediksi'] == pred_key[0]]
+                else:
+                    filtered_df = st.session_state.df_results[st.session_state.df_results['Prediksi'] != '']
+            
+            # Tampilkan hasil
+            st.write(f"**Jumlah Mahasiswa: {len(filtered_df)}**")
+            
+            # Tampilkan dalam bentuk tabel
+            display_cols = ['Nama', 'IPK', 'Frekuensi_Penggunaan_AI', 
+                          'Tingkat_Ketergantungan_AI', 'Perform_Akademik', 'Prediksi', 'Rekomendasi']
+            
+            # Filter kolom yang ada
+            display_cols = [col for col in display_cols if col in filtered_df.columns]
+            
+            # Konversi prediksi numerik ke label
+            display_df = filtered_df[display_cols].copy()
+            if 'Prediksi' in display_df.columns:
+                display_df['Prediksi'] = display_df['Prediksi'].apply(
+                    lambda x: pred_mapping.get(x, x) if pd.notnull(x) else x
+                )
+            
+            st.dataframe(display_df)
+            
+            # Statistik rekomendasi
+            st.subheader("Statistik Rekomendasi")
+            
+            if 'Prediksi' in filtered_df.columns:
+                pred_counts = display_df['Prediksi'].value_counts()
+                
+                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+                
+                # Pie chart
+                ax1.pie(pred_counts.values, labels=pred_counts.index, autopct='%1.1f%%', startangle=90)
+                ax1.set_title('Distribusi Tingkat Prediksi')
+                
+                # Bar chart
+                colors = {'Rendah': 'green', 'Sedang': 'orange', 'Tinggi': 'red'}
+                bar_colors = [colors.get(label, 'gray') for label in pred_counts.index]
+                ax2.bar(pred_counts.index, pred_counts.values, color=bar_colors)
+                ax2.set_title('Jumlah per Tingkat Prediksi')
+                ax2.set_ylabel('Jumlah Mahasiswa')
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+            
+            # Download hasil
+            st.subheader("Download Hasil Analisis")
+            csv = filtered_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="Download hasil sebagai CSV",
+                data=csv,
+                file_name=f"hasil_analisis_ai_{pred_filter.lower()}.csv",
+                mime="text/csv",
+            )
+        else:
+            st.warning("Silakan train model terlebih dahulu di menu 'Model Random Forest'")
 
-def show_siswa_recommendations():
-    """Rekomendasi untuk siswa"""
-    st.markdown('<h1 class="main-header">💡 REKOMENDASI UNTUK ANDA</h1>', unsafe_allow_html=True)
+# Dashboard Mahasiswa
+def mahasiswa_dashboard():
+    st.sidebar.title("👨‍🎓 Dashboard Mahasiswa")
+    st.sidebar.markdown("---")
     
-    # Data siswa
-    student_data = {
-        'Jam_AI_Per_Minggu': 18.5,
-        'IPK': 3.25,
-        'Level': 'PERLU TEGURAN',
-        'Frekuensi_Penggunaan': 'Sering',
-        'Tingkat_Kemahiran': 'Menengah'
-    }
+    # Info mahasiswa
+    if 'student_name' in st.session_state:
+        st.sidebar.write(f"Nama: **{st.session_state.student_name}**")
     
-    level = student_data['Level']
+    if st.sidebar.button("Logout"):
+        st.session_state.logged_in = False
+        st.session_state.user_type = None
+        st.session_state.student_name = None
+        st.rerun()
     
-    # Tampilkan level
-    if level == 'AMAN':
-        st.markdown('<div class="alert-aman">', unsafe_allow_html=True)
-        st.markdown("### ✅ STATUS: LEVEL AMAN")
-        st.write("Penggunaan AI Anda dalam batas wajar. Pertahankan!")
-        st.markdown('</div>', unsafe_allow_html=True)
-    elif level == 'PERLU TEGURAN':
-        st.markdown('<div class="alert-teguran">', unsafe_allow_html=True)
-        st.markdown("### ⚠️ STATUS: PERLU TEGURAN")
-        st.write("Penggunaan AI Anda mulai berlebihan. Perlu dikurangi!")
-        st.markdown('</div>', unsafe_allow_html=True)
+    st.title("📋 Hasil Analisis Penggunaan AI")
+    st.markdown("---")
+    
+    # Cek apakah ada hasil prediksi
+    if 'df_results' in st.session_state and st.session_state.df_results is not None:
+        # Cari data mahasiswa berdasarkan nama
+        student_name = st.session_state.student_name
+        
+        # Cari mahasiswa dengan nama yang mirip
+        student_data = None
+        for name in st.session_state.df_results['Nama']:
+            if student_name.lower() in name.lower():
+                student_data = st.session_state.df_results[st.session_state.df_results['Nama'] == name]
+                break
+        
+        if student_data is not None and not student_data.empty:
+            student_data = student_data.iloc[0]
+            
+            st.subheader(f"Hasil Analisis untuk {student_data['Nama']}")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.metric("IPK", f"{student_data['IPK']:.2f}")
+                if 'Frekuensi_Penggunaan_AI' in student_data:
+                    st.metric("Frekuensi Penggunaan AI", student_data['Frekuensi_Penggunaan_AI'])
+            
+            with col2:
+                if 'Perform_Akademik' in student_data:
+                    st.metric("Performa Akademik", student_data['Perform_Akademik'])
+                if 'Tingkat_Ketergantungan_AI' in student_data:
+                    st.metric("Tingkat Ketergantungan AI", student_data['Tingkat_Ketergantungan_AI'])
+            
+            # Tampilkan prediksi dan rekomendasi
+            if 'Prediksi' in student_data and 'Rekomendasi' in student_data:
+                st.markdown("---")
+                
+                # Mapping prediksi numerik ke label
+                if st.session_state.target in st.session_state.label_encoders:
+                    le = st.session_state.label_encoders[st.session_state.target]
+                    pred_mapping = {i: label for i, label in enumerate(le.classes_)}
+                    pred_label = pred_mapping.get(student_data['Prediksi'], student_data['Prediksi'])
+                else:
+                    pred_label = {0: 'Rendah', 1: 'Sedang', 2: 'Tinggi'}.get(student_data['Prediksi'], student_data['Prediksi'])
+                
+                # Tampilkan dengan warna sesuai tingkat
+                if pred_label == 'Rendah':
+                    st.success(f"**TINGKAT PENGGUNAAN AI: {pred_label.upper()}**")
+                elif pred_label == 'Sedang':
+                    st.warning(f"**TINGKAT PENGGUNAAN AI: {pred_label.upper()}**")
+                elif pred_label == 'Tinggi':
+                    st.error(f"**TINGKAT PENGGUNAAN AI: {pred_label.upper()}**")
+                else:
+                    st.info(f"**TINGKAT PENGGUNAAN AI: {pred_label}**")
+                
+                # Tampilkan rekomendasi
+                st.markdown("### 📝 Rekomendasi")
+                st.markdown(student_data['Rekomendasi'])
+            
+            # Visualisasi perbandingan
+            st.markdown("---")
+            st.subheader("Perbandingan dengan Rata-rata Kelas")
+            
+            # Hitung rata-rata
+            avg_ipk = st.session_state.df_results['IPK'].mean()
+            if 'Frekuensi_Penggunaan_AI' in st.session_state.df_results.columns:
+                frekuensi_counts = st.session_state.df_results['Frekuensi_Penggunaan_AI'].value_counts()
+                most_common_freq = frekuensi_counts.index[0] if not frekuensi_counts.empty else "Tidak ada data"
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Chart IPK
+                fig, ax = plt.subplots(figsize=(8, 4))
+                bars = ax.bar(['Anda', 'Rata-rata Kelas'], 
+                             [student_data['IPK'], avg_ipk], 
+                             color=['blue', 'lightblue'])
+                ax.set_ylabel('IPK')
+                ax.set_title('Perbandingan IPK')
+                ax.set_ylim(0, 4.0)
+                
+                # Tambahkan nilai di atas bar
+                for bar in bars:
+                    height = bar.get_height()
+                    ax.text(bar.get_x() + bar.get_width()/2., height + 0.05,
+                           f'{height:.2f}', ha='center', va='bottom')
+                
+                st.pyplot(fig)
+            
+            with col2:
+                # Info tambahan
+                st.info("**Statistik Kelas:**")
+                st.write(f"- Jumlah mahasiswa: {len(st.session_state.df_results)}")
+                st.write(f"- IPK tertinggi: {st.session_state.df_results['IPK'].max():.2f}")
+                st.write(f"- IPK terendah: {st.session_state.df_results['IPK'].min():.2f}")
+                
+                if 'Frekuensi_Penggunaan_AI' in st.session_state.df_results.columns:
+                    st.write(f"- Frekuensi AI paling umum: {most_common_freq}")
+        
+        else:
+            st.warning(f"Data untuk mahasiswa '{student_name}' tidak ditemukan.")
+            st.info("Data yang tersedia untuk mahasiswa berikut:")
+            available_students = st.session_state.df_results['Nama'].head(10).tolist()
+            for student in available_students:
+                st.write(f"- {student}")
     else:
-        st.markdown('<div class="alert-pengawasan">', unsafe_allow_html=True)
-        st.markdown("### 🚨 STATUS: BUTUH PENGAWASAN")
-        st.write("Penggunaan AI Anda berlebihan! Segera konsultasi dengan dosen.")
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Rekomendasi spesifik
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-    st.subheader("🎯 Rencana Aksi Rekomendasi")
-    
-    if level == 'AMAN':
-        st.write("""
-        **Target 1 Bulan Ke Depan:**
-        1. ✅ Pertahankan penggunaan ≤ 10 jam/minggu
-        2. ✅ Dokumentasikan penggunaan AI untuk portofolio
-        3. ✅ Bagikan tips penggunaan sehat ke teman
-        4. ✅ Eksplorasi tool AI baru untuk skill development
-        
-        **Aksi Spesifik:**
-        - Catat penggunaan AI harian di aplikasi
-        - Ikuti 1 workshop tentang AI dalam 1 bulan
-        - Buat proyek kecil dengan bantuan AI
-        """)
-    
-    elif level == 'PERLU TEGURAN':
-        st.write("""
-        **Target 1 Bulan Ke Depan:**
-        1. ⚠️ Turunkan penggunaan ke ≤ 15 jam/minggu
-        2. ⚠️ Konsultasi dengan dosen wali
-        3. ⚠️ Ikuti workshop "Penggunaan AI Sehat"
-        4. ⚠️ Buat jadwal belajar tanpa AI
-        
-        **Aksi Spesifik:**
-        - Kurangi 30 menit penggunaan AI per hari
-        - Jadwalkan konsultasi minggu depan
-        - Catat situasi saat paling tergantung AI
-        - Cari alternatif metode belajar
-        """)
-    
-    else:  # BUTUH PENGAWASAN
-        st.write("""
-        **Target 2 Minggu Ke Depan:**
-        1. 🚨 Segera konsultasi dengan dosen wali
-        2. 🚨 Kurangi penggunaan menjadi ≤ 10 jam/minggu
-        3. 🚨 Ikuti program bimbingan khusus
-        4. 🚨 Laporkan perkembangan mingguan
-        
-        **Aksi Spesifik:**
-        - Hubungi dosen wali HARI INI
-        - Buat komitmen tertulis untuk mengurangi AI
-        - Ikut sesi konseling kampus
-        - Minta teman untuk mengingatkan
-        """)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Tips penggunaan AI yang sehat
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-    st.subheader("🌱 Tips Penggunaan AI yang Sehat")
-    
-    tips = [
-        "1. **Gunakan untuk brainstorming**, bukan mengerjakan seluruh tugas",
-        "2. **Selalu verifikasi** informasi dari AI dengan sumber lain",
-        "3. **Batasi waktu** penggunaan maksimal 2 jam per sesi",
-        "4. **Fokus pada pemahaman konsep**, bukan hanya mencari jawaban",
-        "5. **Gunakan AI sebagai asisten**, bukan pengganti pemikiran",
-        "6. **Dokumentasikan** apa yang dipelajari dari AI",
-        "7. **Diskusikan** penggunaan AI dengan dosen/teman",
-        "8. **Istirahat** 10 menit setiap 50 menit penggunaan",
-        "9. **Eksplorasi tool** yang mendukung pembelajaran, bukan shortcut",
-        "10. **Evaluasi berkala** pengaruh AI terhadap pemahaman Anda"
-    ]
-    
-    for tip in tips:
-        st.write(tip)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Resources tambahan
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-    st.subheader("📚 Resources Tambahan")
-    
-    resources = {
-        "Workshop Kampus": "Penggunaan AI dalam Akademik (setiap Jumat)",
-        "Konseling": "Layanan Konseling Mahasiswa (Gedung B Lantai 3)",
-        "Buku Panduan": "Pedoman Penggunaan AI untuk Mahasiswa",
-        "Forum Diskusi": "Forum Mahasiswa Teknologi Informasi",
-        "Kelas Online": "AI Literacy for Students (Coursera)"
-    }
-    
-    for resource, desc in resources.items():
-        with st.expander(f"📖 {resource}"):
-            st.write(desc)
-            if st.button(f"Akses {resource}", key=resource):
-                st.info(f"Mengarahkan ke {resource}...")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+        st.warning("Belum ada hasil analisis yang tersedia.")
+        st.info("Silakan minta guru/admin untuk melakukan analisis data terlebih dahulu.")
 
-def show_siswa_help():
-    """Halaman bantuan untuk siswa"""
-    st.markdown('<h1 class="main-header">ℹ️ BANTUAN</h1>', unsafe_allow_html=True)
-    
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-    st.subheader("❓ Cara Menggunakan Dashboard")
-    
-    faq = {
-        "Bagaimana cara melihat level saya?": "Level dapat dilihat di menu 'Dashboard Saya' atau 'Statistik Saya'",
-        "Apa arti dari masing-masing level?": """
-        - **AMAN**: Penggunaan AI ≤ 10 jam/minggu (sehat)
-        - **PERLU TEGURAN**: 11-20 jam/minggu (perlu perhatian)
-        - **BUTUH PENGAWASAN**: > 20 jam/minggu (butuh intervensi)
-        """,
-        "Bagaimana cara memperbaiki level saya?": "Ikuti rekomendasi di menu 'Rekomendasi' dan konsultasi dengan dosen",
-        "Data saya salah, bagaimana memperbaikinya?": "Hubungi admin sistem atau dosen pembimbing",
-        "Apa yang harus dilakukan jika level saya 'BUTUH PENGAWASAN'?": "Segera konsultasi dengan dosen wali dan ikuti program bimbingan",
-    }
-    
-    for question, answer in faq.items():
-        with st.expander(f"❔ {question}"):
-            st.write(answer)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Kontak bantuan
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
-    st.subheader("📞 Kontak Bantuan")
-    
-    contacts = {
-        "Dosen Pembimbing": "Dr. Ahmad, M.Kom (ahmad@kampus.ac.id)",
-        "Admin Sistem": "Budi, S.Kom (budi@kampus.ac.id)",
-        "Konseling Mahasiswa": "Gedung B Lantai 3 (08:00-16:00)",
-        "Layanan Darurat": "Telepon: (021) 12345678",
-    }
-    
-    for position, contact in contacts.items():
-        st.write(f"**{position}:** {contact}")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# ========== MAIN APP ==========
-
+# Aplikasi utama
 def main():
-    """Aplikasi utama"""
-    initialize_session_state()
+    # Inisialisasi session state
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+        st.session_state.user_type = None
     
-    # Tampilkan halaman berdasarkan status login
+    # Tampilkan halaman sesuai status login
     if not st.session_state.logged_in:
-        login()
+        login_page()
     else:
-        if st.session_state.role == "guru":
-            dashboard_guru()
-        else:  # siswa
-            dashboard_siswa()
+        if st.session_state.user_type == "guru":
+            guru_dashboard()
+        else:
+            mahasiswa_dashboard()
 
 if __name__ == "__main__":
     main()
