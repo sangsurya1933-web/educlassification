@@ -14,6 +14,9 @@ import warnings
 warnings.filterwarnings('ignore')
 import hashlib
 import pickle
+import io
+import base64
+from datetime import datetime
 
 # Set page configuration
 st.set_page_config(
@@ -73,6 +76,18 @@ st.markdown("""
     .stButton > button:hover {
         background: linear-gradient(90deg, #2874A6, #2E86C1);
     }
+    .upload-section {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 2rem;
+    }
+    .file-info {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 5px;
+        border: 2px dashed #dee2e6;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -93,6 +108,10 @@ if 'results' not in st.session_state:
     st.session_state.results = None
 if 'knowledge_base' not in st.session_state:
     st.session_state.knowledge_base = None
+if 'uploaded_file' not in st.session_state:
+    st.session_state.uploaded_file = None
+if 'data_source' not in st.session_state:
+    st.session_state.data_source = "default"
 
 class KnowledgeBaseSystem:
     """Sistem Knowledge Base untuk rekomendasi penggunaan AI"""
@@ -210,8 +229,8 @@ class KnowledgeBaseSystem:
             'risk_level': 'TINGGI' if percentages['TINGGI'] > 30 else 'SEDANG' if percentages['TINGGI'] > 10 else 'RENDAH'
         }
 
-def load_dataset():
-    """Load dataset dari data yang diberikan"""
+def load_default_dataset():
+    """Load dataset default dari data yang diberikan"""
     data = {
         'Nama': [
             'Althaf Rayyan Putra', 'Ayesha Kinanti', 'Salsabila Nurfadila', 'Anindya Safira',
@@ -262,6 +281,29 @@ def load_dataset():
     
     df = pd.DataFrame(data)
     return df
+
+def validate_dataset(df):
+    """Validasi dataset yang diupload"""
+    required_columns = ['Nama', 'Studi_Jurusan', 'Semester', 'AI_Tools', 'Trust_Level', 'Usage_Intensity_Score']
+    
+    # Check required columns
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        return False, f"Kolom yang hilang: {', '.join(missing_columns)}"
+    
+    # Check data types
+    try:
+        df['Semester'] = pd.to_numeric(df['Semester'])
+        df['Trust_Level'] = pd.to_numeric(df['Trust_Level'])
+        df['Usage_Intensity_Score'] = pd.to_numeric(df['Usage_Intensity_Score'].astype(str).str.replace('10\+', '10', regex=True))
+    except:
+        return False, "Error konversi tipe data. Pastikan Semester, Trust_Level, dan Usage_Intensity_Score adalah angka"
+    
+    # Check for empty values
+    if df[required_columns].isnull().any().any():
+        return False, "Dataset mengandung nilai kosong (null)"
+    
+    return True, "Dataset valid"
 
 def clean_data(df):
     """Pembersihan data"""
@@ -401,6 +443,13 @@ def create_visualizations(df, predictions):
     fig.update_layout(height=800, showlegend=False, title_text="Analisis Penggunaan AI Mahasiswa")
     return fig
 
+def get_download_link(df, filename="dataset.csv", text="Download CSV"):
+    """Generate download link for CSV file"""
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()
+    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; border-radius: 5px;">{text}</a>'
+    return href
+
 def login_page():
     """Halaman login"""
     st.markdown("<h1 class='main-header'>🔐 Sistem Analisis Penggunaan AI Mahasiswa</h1>", unsafe_allow_html=True)
@@ -450,6 +499,11 @@ def login_page():
         - Mengklasifikasikan tingkat penggunaan (Rendah, Sedang, Tinggi)
         - Memberikan rekomendasi berdasarkan hasil analisis
         - Membantu monitoring penggunaan AI yang sehat
+        
+        **Format Dataset:**
+        - File CSV dengan kolom: Nama, Studi_Jurusan, Semester, AI_Tools, Trust_Level, Usage_Intensity_Score
+        - Semester, Trust_Level, Usage_Intensity_Score harus angka
+        - Usage_Intensity_Score: 0-10 (atau 10+ akan dianggap sebagai 10)
         """)
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -467,20 +521,32 @@ def guru_dashboard():
         st.markdown("### 📊 Menu Analisis")
         menu = st.radio(
             "Pilih Menu:",
-            ["📁 Data Management", "🧹 Data Cleaning", "🔧 Data Processing", 
+            ["📁 Upload Dataset", "🧹 Data Cleaning", "🔧 Data Processing", 
              "🤖 Model Training", "📈 Evaluasi Model", "🎯 Rekomendasi", "📊 Dashboard Analitik"]
         )
         st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Data source info
+        if st.session_state.data_source:
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
+            st.markdown("### 📂 Sumber Data")
+            if st.session_state.data_source == "uploaded":
+                st.success("✅ Dataset dari file upload")
+            else:
+                st.info("📊 Dataset default")
+            st.markdown("</div>", unsafe_allow_html=True)
         
         # Logout button
         if st.button("🚪 Logout"):
             st.session_state.authenticated = False
             st.session_state.user_role = None
+            st.session_state.uploaded_file = None
+            st.session_state.data_source = "default"
             st.rerun()
     
     # Main content based on menu
-    if menu == "📁 Data Management":
-        data_management()
+    if menu == "📁 Upload Dataset":
+        upload_dataset_section()
     elif menu == "🧹 Data Cleaning":
         data_cleaning_section()
     elif menu == "🔧 Data Processing":
@@ -494,71 +560,172 @@ def guru_dashboard():
     elif menu == "📊 Dashboard Analitik":
         analytics_dashboard()
 
-def data_management():
-    """Manajemen data"""
-    st.header("📁 Management Data")
+def upload_dataset_section():
+    """Section untuk upload dataset"""
+    st.header("📁 Upload Dataset CSV")
     
-    # Load dataset
-    if st.session_state.df is None:
-        if st.button("📥 Load Dataset"):
-            st.session_state.df = load_dataset()
-            st.success("Dataset berhasil dimuat!")
+    st.markdown("""
+    <div class="upload-section">
+        <h3>📤 Upload Dataset Baru</h3>
+        <p>Upload file CSV dengan data mahasiswa untuk dianalisis.</p>
+        <p><strong>Format yang diperlukan:</strong></p>
+        <ul>
+            <li>Kolom: <code>Nama</code>, <code>Studi_Jurusan</code>, <code>Semester</code>, <code>AI_Tools</code>, <code>Trust_Level</code>, <code>Usage_Intensity_Score</code></li>
+            <li>File harus dalam format CSV</li>
+            <li>Encoding: UTF-8</li>
+            <li>Usage_Intensity_Score: skala 0-10 (10+ akan dikonversi ke 10)</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
     
-    if st.session_state.df is not None:
-        # Display data
-        st.subheader("📋 Dataset Mahasiswa")
-        st.dataframe(st.session_state.df, use_container_width=True)
+    # Upload file section
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        uploaded_file = st.file_uploader(
+            "Pilih file CSV",
+            type=["csv"],
+            help="Upload dataset dalam format CSV"
+        )
+    
+    with col2:
+        st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+        use_default = st.button("📊 Gunakan Dataset Default")
+    
+    # Handle file upload
+    if uploaded_file is not None:
+        try:
+            # Read the CSV file
+            df = pd.read_csv(uploaded_file)
+            
+            # Validate the dataset
+            is_valid, message = validate_dataset(df)
+            
+            if is_valid:
+                st.session_state.df = df
+                st.session_state.uploaded_file = uploaded_file.name
+                st.session_state.data_source = "uploaded"
+                
+                # Clear previous processed data
+                if 'df_clean' in st.session_state:
+                    del st.session_state.df_clean
+                if 'model' in st.session_state:
+                    del st.session_state.model
+                if 'results' in st.session_state:
+                    del st.session_state.results
+                
+                st.success(f"✅ Dataset berhasil diupload: {uploaded_file.name}")
+                
+                # Show dataset info
+                st.markdown("<div class='file-info'>", unsafe_allow_html=True)
+                st.markdown(f"**📊 Info Dataset:**")
+                st.markdown(f"- **Nama file:** {uploaded_file.name}")
+                st.markdown(f"- **Jumlah data:** {len(df)} baris")
+                st.markdown(f"- **Jumlah kolom:** {len(df.columns)}")
+                st.markdown(f"- **Kolom:** {', '.join(df.columns.tolist())}")
+                st.markdown("</div>", unsafe_allow_html=True)
+                
+                # Show data preview
+                st.subheader("👀 Preview Data")
+                st.dataframe(df.head(10), use_container_width=True)
+                
+                # Download template button
+                st.markdown("---")
+                st.subheader("📥 Download Template")
+                st.markdown("Jika perlu template dataset, download template berikut:")
+                
+                # Create template DataFrame
+                template_data = {
+                    'Nama': ['Mahasiswa 1', 'Mahasiswa 2', 'Mahasiswa 3'],
+                    'Studi_Jurusan': ['Teknologi Informasi', 'Teknik Informatika', 'Farmasi'],
+                    'Semester': [3, 5, 7],
+                    'AI_Tools': ['ChatGPT', 'Gemini', 'Multiple'],
+                    'Trust_Level': [4, 3, 5],
+                    'Usage_Intensity_Score': [6, 8, 3]
+                }
+                template_df = pd.DataFrame(template_data)
+                
+                # Generate download link
+                st.markdown(get_download_link(template_df, "template_dataset.csv", "📥 Download Template CSV"), unsafe_allow_html=True)
+                
+            else:
+                st.error(f"❌ Dataset tidak valid: {message}")
+                st.info("Pastikan dataset memiliki kolom yang diperlukan dan format yang benar.")
+                
+        except Exception as e:
+            st.error(f"Error membaca file: {str(e)}")
+    
+    # Handle default dataset
+    elif use_default:
+        st.session_state.df = load_default_dataset()
+        st.session_state.data_source = "default"
+        st.session_state.uploaded_file = None
         
-        # Data statistics
-        col1, col2, col3, col4 = st.columns(4)
+        # Clear previous processed data
+        if 'df_clean' in st.session_state:
+            del st.session_state.df_clean
+        if 'model' in st.session_state:
+            del st.session_state.model
+        if 'results' in st.session_state:
+            del st.session_state.results
+        
+        st.success("✅ Dataset default berhasil dimuat!")
+        
+        # Show dataset info
+        df = st.session_state.df
+        st.markdown("<div class='file-info'>", unsafe_allow_html=True)
+        st.markdown(f"**📊 Info Dataset:**")
+        st.markdown(f"- **Sumber:** Dataset Default")
+        st.markdown(f"- **Jumlah data:** {len(df)} baris")
+        st.markdown(f"- **Jumlah kolom:** {len(df.columns)}")
+        st.markdown(f"- **Kolom:** {', '.join(df.columns.tolist())}")
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Show data preview
+        st.subheader("👀 Preview Data")
+        st.dataframe(df.head(10), use_container_width=True)
+    
+    # Show current dataset if exists
+    elif st.session_state.df is not None:
+        st.subheader("📋 Dataset Saat Ini")
+        
+        # Show dataset info
+        df = st.session_state.df
+        source = "Uploaded File" if st.session_state.data_source == "uploaded" else "Default"
+        
+        col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("Jumlah Data", len(st.session_state.df))
+            st.metric("Sumber Data", source)
         with col2:
-            st.metric("Jumlah Jurusan", st.session_state.df['Studi_Jurusan'].nunique())
+            st.metric("Jumlah Data", len(df))
         with col3:
-            avg_usage = st.session_state.df['Usage_Intensity_Score'].apply(
-                lambda x: 10 if str(x) == '10+' else float(x)
-            ).mean()
-            st.metric("Rata-rata Penggunaan", f"{avg_usage:.2f}")
-        with col4:
-            st.metric("Tools AI Berbeda", st.session_state.df['AI_Tools'].nunique())
+            st.metric("Jumlah Kolom", len(df.columns))
         
         # Data preview
-        st.subheader("👀 Preview Data")
-        tab1, tab2, tab3 = st.tabs(["Statistik", "Distribusi", "Info"])
+        st.dataframe(df.head(10), use_container_width=True)
         
-        with tab1:
-            st.write(st.session_state.df.describe())
-        
-        with tab2:
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-            
-            # Distribution of Usage Intensity
-            usage_scores = st.session_state.df['Usage_Intensity_Score'].apply(
-                lambda x: 10 if str(x) == '10+' else float(x)
-            )
-            ax1.hist(usage_scores, bins=10, edgecolor='black', alpha=0.7)
-            ax1.set_title('Distribusi Skor Penggunaan AI')
-            ax1.set_xlabel('Skor Penggunaan')
-            ax1.set_ylabel('Frekuensi')
-            
-            # Distribution of Trust Level
-            trust_counts = st.session_state.df['Trust_Level'].value_counts().sort_index()
-            ax2.bar(trust_counts.index, trust_counts.values, alpha=0.7)
-            ax2.set_title('Distribusi Tingkat Kepercayaan AI')
-            ax2.set_xlabel('Tingkat Kepercayaan')
-            ax2.set_ylabel('Frekuensi')
-            
-            plt.tight_layout()
-            st.pyplot(fig)
+        # Option to clear dataset
+        if st.button("🗑️ Hapus Dataset Saat Ini"):
+            st.session_state.df = None
+            st.session_state.df_clean = None
+            st.session_state.model = None
+            st.session_state.results = None
+            st.session_state.uploaded_file = None
+            st.session_state.data_source = "default"
+            st.rerun()
+    
+    else:
+        st.info("👆 Silakan upload file CSV atau gunakan dataset default untuk memulai analisis.")
 
 def data_cleaning_section():
     """Data cleaning section"""
     st.header("🧹 Data Cleaning")
     
     if st.session_state.df is None:
-        st.warning("Harap load dataset terlebih dahulu di menu Data Management!")
+        st.warning("Harap upload dataset terlebih dahulu di menu 'Upload Dataset'!")
         return
+    
+    df = st.session_state.df
     
     st.info("""
     **Proses Data Cleaning:**
@@ -568,9 +735,32 @@ def data_cleaning_section():
     4. Validasi tipe data
     """)
     
+    # Show data before cleaning
+    st.subheader("📊 Data Sebelum Cleaning")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        duplicates = df.duplicated(subset=['Nama']).sum()
+        st.metric("Duplikat Nama", duplicates)
+    with col2:
+        missing = df.isnull().sum().sum()
+        st.metric("Missing Values", missing)
+    with col3:
+        invalid_scores = df['Usage_Intensity_Score'].apply(
+            lambda x: isinstance(x, str) and not x.replace('10+', '10').isdigit()
+        ).sum()
+        st.metric("Skor Tidak Valid", invalid_scores)
+    with col4:
+        data_types_ok = all([
+            pd.api.types.is_numeric_dtype(df['Semester']),
+            pd.api.types.is_numeric_dtype(df['Trust_Level'])
+        ])
+        st.metric("Tipe Data OK", "✅" if data_types_ok else "❌")
+    
     if st.button("🚀 Jalankan Data Cleaning", type="primary"):
         with st.spinner("Melakukan data cleaning..."):
-            st.session_state.df_clean = clean_data(st.session_state.df)
+            df_clean = clean_data(df)
+            st.session_state.df_clean = df_clean
             st.success("✅ Data cleaning selesai!")
             
             # Show cleaning results
@@ -581,22 +771,58 @@ def data_cleaning_section():
             with col1:
                 st.markdown("<div class='card'>", unsafe_allow_html=True)
                 st.markdown("**Sebelum Cleaning:**")
-                st.write(f"- Jumlah data: {len(st.session_state.df)}")
-                st.write(f"- Data duplikat: {st.session_state.df.duplicated().sum()}")
-                st.write(f"- Missing values: {st.session_state.df.isnull().sum().sum()}")
+                st.write(f"- Jumlah data: {len(df)}")
+                st.write(f"- Data duplikat: {duplicates}")
+                st.write(f"- Missing values: {missing}")
                 st.markdown("</div>", unsafe_allow_html=True)
             
             with col2:
                 st.markdown("<div class='card success-card'>", unsafe_allow_html=True)
                 st.markdown("**Setelah Cleaning:**")
-                st.write(f"- Jumlah data: {len(st.session_state.df_clean)}")
-                st.write(f"- Data duplikat: {st.session_state.df_clean.duplicated().sum()}")
-                st.write(f"- Missing values: {st.session_state.df_clean.isnull().sum().sum()}")
+                st.write(f"- Jumlah data: {len(df_clean)}")
+                st.write(f"- Data duplikat: {df_clean.duplicated().sum()}")
+                st.write(f"- Missing values: {df_clean.isnull().sum().sum()}")
                 st.markdown("</div>", unsafe_allow_html=True)
             
             # Show cleaned data
             st.subheader("📋 Data Setelah Cleaning")
-            st.dataframe(st.session_state.df_clean, use_container_width=True)
+            st.dataframe(df_clean, use_container_width=True)
+            
+            # Data quality metrics
+            st.subheader("📈 Metrik Kualitas Data")
+            
+            # Calculate data quality score
+            total_rows = len(df_clean)
+            quality_metrics = {
+                'Kompleteness': 1 - (df_clean.isnull().sum().sum() / (total_rows * len(df_clean.columns))),
+                'Uniqueness': 1 - (df_clean.duplicated().sum() / total_rows),
+                'Validity': 1 - (df_clean['Usage_Intensity_Score'].apply(
+                    lambda x: not (0 <= float(x) <= 10)
+                ).sum() / total_rows),
+                'Consistency': 1 - (df_clean['Semester'].apply(
+                    lambda x: not (1 <= x <= 8)
+                ).sum() / total_rows)
+            }
+            
+            # Display quality metrics
+            quality_df = pd.DataFrame.from_dict(quality_metrics, orient='index', columns=['Score'])
+            quality_df['Score'] = quality_df['Score'].apply(lambda x: f"{x:.1%}")
+            
+            st.dataframe(quality_df, use_container_width=True)
+    
+    elif st.session_state.df_clean is not None:
+        st.success("✅ Data sudah dibersihkan sebelumnya!")
+        
+        df_clean = st.session_state.df_clean
+        
+        # Show cleaned data
+        st.subheader("📋 Data Setelah Cleaning")
+        st.dataframe(df_clean.head(10), use_container_width=True)
+        
+        # Option to re-run cleaning
+        if st.button("🔄 Jalankan Ulang Data Cleaning"):
+            st.session_state.df_clean = None
+            st.rerun()
 
 def data_processing():
     """Data processing section"""
@@ -637,19 +863,29 @@ def data_processing():
             st.subheader("📊 Hasil Encoding")
             
             # Show encoded values
-            st.write("**Mapping Jurusan:**")
-            jurusan_mapping = dict(zip(
-                st.session_state.encoders['Studi_Jurusan'].classes_,
-                range(len(st.session_state.encoders['Studi_Jurusan'].classes_))
-            ))
-            st.write(jurusan_mapping)
+            col1, col2 = st.columns(2)
             
-            st.write("**Mapping AI Tools:**")
-            tools_mapping = dict(zip(
-                st.session_state.encoders['AI_Tools'].classes_,
-                range(len(st.session_state.encoders['AI_Tools'].classes_))
-            ))
-            st.write(tools_mapping)
+            with col1:
+                st.markdown("<div class='card'>", unsafe_allow_html=True)
+                st.markdown("**Mapping Jurusan:**")
+                jurusan_mapping = dict(zip(
+                    st.session_state.encoders['Studi_Jurusan'].classes_,
+                    range(len(st.session_state.encoders['Studi_Jurusan'].classes_))
+                ))
+                for key, value in jurusan_mapping.items():
+                    st.write(f"{key} → {value}")
+                st.markdown("</div>", unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown("<div class='card'>", unsafe_allow_html=True)
+                st.markdown("**Mapping AI Tools:**")
+                tools_mapping = dict(zip(
+                    st.session_state.encoders['AI_Tools'].classes_,
+                    range(len(st.session_state.encoders['AI_Tools'].classes_))
+                ))
+                for key, value in tools_mapping.items():
+                    st.write(f"{key} → {value}")
+                st.markdown("</div>", unsafe_allow_html=True)
             
             # Show processed data
             st.subheader("📋 Data Setelah Processing")
@@ -659,9 +895,25 @@ def data_processing():
             st.subheader("🎯 Distribusi Target (Usage Level)")
             level_counts = df_encoded['Usage_Level'].value_counts()
             
+            # Create visualization
             fig = px.pie(values=level_counts.values, names=level_counts.index,
-                        title="Distribusi Tingkat Penggunaan AI")
+                        title="Distribusi Tingkat Penggunaan AI",
+                        color=level_counts.index,
+                        color_discrete_map={
+                            'RENDAH': '#2ECC71',
+                            'SEDANG': '#F39C12',
+                            'TINGGI': '#E74C3C'
+                        })
             st.plotly_chart(fig, use_container_width=True)
+            
+            # Show statistics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Level Rendah", level_counts.get('RENDAH', 0))
+            with col2:
+                st.metric("Level Sedang", level_counts.get('SEDANG', 0))
+            with col3:
+                st.metric("Level Tinggi", level_counts.get('TINGGI', 0))
 
 def model_training():
     """Model training section"""
@@ -747,8 +999,19 @@ def model_training():
             importances = model.feature_importances_
             
             fig = px.bar(x=feature_names, y=importances,
-                        title="Importance Fitur dalam Model")
+                        title="Importance Fitur dalam Model",
+                        labels={'x': 'Fitur', 'y': 'Importance'},
+                        color=importances,
+                        color_continuous_scale='Viridis')
             st.plotly_chart(fig, use_container_width=True)
+            
+            # Show detailed feature importance
+            importance_df = pd.DataFrame({
+                'Fitur': feature_names,
+                'Importance': importances
+            }).sort_values('Importance', ascending=False)
+            
+            st.dataframe(importance_df, use_container_width=True)
 
 def model_evaluation():
     """Model evaluation section"""
@@ -798,7 +1061,8 @@ def model_evaluation():
                     x=['RENDAH', 'SEDANG', 'TINGGI'],
                     y=['RENDAH', 'SEDANG', 'TINGGI'],
                     title="Confusion Matrix",
-                    text_auto=True)
+                    text_auto=True,
+                    color_continuous_scale='Blues')
     st.plotly_chart(fig, use_container_width=True)
     
     # Actual vs Predicted comparison
@@ -815,6 +1079,16 @@ def model_evaluation():
     })
     
     st.dataframe(comparison_df, use_container_width=True)
+    
+    # Calculate and display mismatch
+    mismatch = (comparison_df['Actual'] != comparison_df['Predicted']).sum()
+    match = len(comparison_df) - mismatch
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Prediksi Sesuai", match)
+    with col2:
+        st.metric("Prediksi Tidak Sesuai", mismatch)
 
 def recommendations_section():
     """Recommendations section"""
@@ -947,6 +1221,29 @@ def recommendations_section():
                     label="Download CSV",
                     data=csv,
                     file_name="rekomendasi_penggunaan_ai.csv",
+                    mime="text/csv"
+                )
+        
+        with col2:
+            # Export summary report
+            if st.button("📊 Export Ringkasan"):
+                summary_data = {
+                    'Total_Mahasiswa': [summary['total_students']],
+                    'Level_Rendah': [summary['counts']['RENDAH']],
+                    'Level_Sedang': [summary['counts']['SEDANG']],
+                    'Level_Tinggi': [summary['counts']['TINGGI']],
+                    'Level_Dominan': [summary['dominant_class']],
+                    'Tingkat_Risiko': [summary['risk_level']],
+                    'Tanggal_Analisis': [datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
+                }
+                
+                summary_df = pd.DataFrame(summary_data)
+                csv = summary_df.to_csv(index=False)
+                
+                st.download_button(
+                    label="Download Ringkasan",
+                    data=csv,
+                    file_name="ringkasan_analisis_ai.csv",
                     mime="text/csv"
                 )
 
@@ -1177,6 +1474,42 @@ def mahasiswa_dashboard():
                 
                 fig.update_layout(height=300)
                 st.plotly_chart(fig, use_container_width=True)
+                
+                # Download personal report
+                st.markdown("### 📥 Download Laporan Pribadi")
+                
+                # Create personal report
+                personal_report = f"""
+                LAPORAN ANALISIS PENGGUNAAN AI - {student['Nama']}
+                Tanggal: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                
+                PROFIL MAHASISWA:
+                - Nama: {student['Nama']}
+                - Jurusan: {student['Studi_Jurusan']}
+                - Semester: {student['Semester']}
+                - Tools AI yang Digunakan: {student['AI_Tools']}
+                - Tingkat Kepercayaan AI: {student['Trust_Level']}/5
+                - Skor Penggunaan AI: {student['Usage_Intensity_Score']}/10
+                
+                HASIL ANALISIS:
+                - Klasifikasi: {classification}
+                - Label: {recommendation['label']}
+                - Level Monitoring: {recommendation['monitoring_level']}
+                
+                REKOMENDASI:
+                {chr(10).join(['- ' + rec for rec in recommendation['details']])}
+                
+                TINDAKAN YANG DISARANKAN:
+                {chr(10).join(['- ' + action for action in recommendation['actions']])}
+                
+                TIPS PENGGUNAAN AI YANG SEHAT:
+                {chr(10).join(['- ' + tip for tip in tips])}
+                """
+                
+                # Convert to bytes for download
+                b64 = base64.b64encode(personal_report.encode()).decode()
+                href = f'<a href="data:file/txt;base64,{b64}" download="laporan_ai_{student["Nama"].replace(" ", "_")}.txt" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; border-radius: 5px;">📄 Download Laporan Pribadi</a>'
+                st.markdown(href, unsafe_allow_html=True)
                 
             else:
                 st.warning(f"Data tidak ditemukan untuk nama '{student_name}'.")
