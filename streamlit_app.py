@@ -827,23 +827,7 @@ def login_page():
         
         
 
-def upload_dataset_section():
-    """Section untuk upload dataset"""
-    st.header(" Upload Dataset CSV")
-    
-    st.markdown("""
-    <div class="upload-section">
-        <h3>📤 Upload Dataset Baru</h3>
-        <p>Upload file CSV dengan data mahasiswa untuk dianalisis.</p>
-        <p><strong>Format yang diperlukan:</strong></p>
-        <ul>
-            <li>Kolom: <code>Nama</code>, <code>Studi_Jurusan</code>, <code>Semester</code>, <code>AI_Tools</code>, <code>Trust_Level</code>, <code>Usage_Intensity_Score</code></li>
-            <li>File harus dalam format CSV</li>
-            <li>Encoding: UTF-8</li>
-            <li>Usage_Intensity_Score: skala 1-10 (10+ akan dikonversi ke 10)</li>
-            <li>Pemisah kolom: titik koma (;) atau koma (,)</li>
-        </ul>
-    </div>
+
     """, unsafe_allow_html=True)
     
     # Show score interpretation table
