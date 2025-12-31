@@ -22,7 +22,7 @@ import csv
 # Set page configuration
 st.set_page_config(
     page_title="Sistem Analisis Penggunaan AI Mahasiswa",
-    page_icon="🎓",
+    page_icon="",
     layout="wide"
 )
 
@@ -152,7 +152,7 @@ class KnowledgeBaseSystem:
                 'score_range': (1, 3),
                 'label': 'AMAN',
                 'color': '#2ECC71',
-                'icon': '✅',
+                'icon': '',
                 'recommendations': [
                     'Penggunaan AI dalam batas wajar dan sehat',
                     'Frekuensi penggunaan sesuai kebutuhan belajar',
@@ -170,7 +170,7 @@ class KnowledgeBaseSystem:
                 'score_range': (4, 7),
                 'label': 'PERLU PERHATIAN',
                 'color': '#F39C12',
-                'icon': '⚠️',
+                'icon': '',
                 'recommendations': [
                     'Penggunaan AI mulai intensif',
                     'Perlu evaluasi ketergantungan pada AI',
@@ -189,7 +189,7 @@ class KnowledgeBaseSystem:
                 'score_range': (8, 10),
                 'label': 'BUTUH PENGAWASAN',
                 'color': '#E74C3C',
-                'icon': '🚨',
+                'icon': '',
                 'recommendations': [
                     'Penggunaan AI sangat intensif dan berpotensi mengganggu',
                     'Tingkat ketergantungan tinggi terhadap AI',
@@ -1350,7 +1350,7 @@ def data_cleaning_section():
 
 def data_processing_section():
     """Data processing section"""
-    st.header("🔧 Data Processing & Encoding")
+    st.header("Data Processing & Encoding")
     
     if st.session_state.df_clean is None:
         st.warning("Harap jalankan data cleaning terlebih dahulu!")
@@ -1391,7 +1391,7 @@ def data_processing_section():
                 st.success("✅ Data processing selesai!")
                 
                 # Show encoding results
-                st.subheader("📊 Hasil Encoding")
+                st.subheader(" Hasil Encoding")
                 
                 # Show encoded values
                 if 'Studi_Jurusan' in encoders:
@@ -1409,7 +1409,7 @@ def data_processing_section():
                         st.markdown("</div>", unsafe_allow_html=True)
                 
                 # Show processed data
-                st.subheader("📋 Data Setelah Processing")
+                st.subheader("Data Setelah Processing")
                 
                 # Add frequency interpretation
                 kb = KnowledgeBaseSystem()
@@ -1449,7 +1449,7 @@ def data_processing_section():
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # Show statistics with frequency interpretation
-                    st.subheader("📈 Statistik Klasifikasi")
+                    st.subheader("Statistik Klasifikasi")
                     
                     col1, col2, col3 = st.columns(3)
                     with col1:
