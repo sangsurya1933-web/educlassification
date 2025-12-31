@@ -17,7 +17,6 @@ import pickle
 import io
 import base64
 from datetime import datetime
-import csv
 
 # Set page configuration
 st.set_page_config(
@@ -126,8 +125,6 @@ if 'uploaded_file' not in st.session_state:
     st.session_state.uploaded_file = None
 if 'data_source' not in st.session_state:
     st.session_state.data_source = "default"
-if 'predictions' not in st.session_state:
-    st.session_state.predictions = None
 
 class KnowledgeBaseSystem:
     """Sistem Knowledge Base untuk rekomendasi penggunaan AI"""
@@ -211,15 +208,13 @@ class KnowledgeBaseSystem:
         """Dapatkan interpretasi frekuensi berdasarkan skor"""
         if isinstance(score, str) and score == '10+':
             score = 10
-        try:
-            score = int(float(score))
-            if score in self.score_interpretation:
-                return self.score_interpretation[score]
-            elif score > 10:
-                return {"frequency": ">20 kali/minggu", "description": "Penggunaan ekstrem"}
-            else:
-                return {"frequency": "Tidak terdefinisi", "description": "Skor tidak valid"}
-        except:
+        score = int(float(score))
+        
+        if score in self.score_interpretation:
+            return self.score_interpretation[score]
+        elif score > 10:
+            return {"frequency": ">20 kali/minggu", "description": "Penggunaan ekstrem"}
+        else:
             return {"frequency": "Tidak terdefinisi", "description": "Skor tidak valid"}
     
     def classify_usage(self, score):
@@ -308,8 +303,7 @@ class KnowledgeBaseSystem:
         else:
             percentages = {}
         
-        dominant_class = max([k for k in counts.keys() if k != 'TIDAK_VALID'], 
-                            key=lambda x: counts[x], default='TIDAK_VALID')
+        dominant_class = max([k for k in counts.keys() if k != 'TIDAK_VALID'], key=lambda x: counts[x], default='TIDAK_VALID')
         
         return {
             'total_students': total,
@@ -321,357 +315,151 @@ class KnowledgeBaseSystem:
             'risk_level': 'TINGGI' if percentages.get('TINGGI', 0) > 30 else 'SEDANG' if percentages.get('TINGGI', 0) > 10 else 'RENDAH'
         }
 
-def read_csv_with_various_delimiters(uploaded_file):
-    """Membaca file CSV dengan berbagai delimiter"""
-    content = uploaded_file.getvalue().decode('utf-8')
-    
-    # Coba dengan titik koma (;) terlebih dahulu
-    try:
-        # Gunakan csv reader untuk mendeteksi delimiter
-        dialect = csv.Sniffer().sniff(content[:1024])
-        # Baca dengan pandas menggunakan delimiter yang terdeteksi
-        if hasattr(dialect, 'delimiter'):
-            df = pd.read_csv(uploaded_file, sep=dialect.delimiter)
-            st.info(f"Delimiter terdeteksi: '{dialect.delimiter}'")
-            return df
-    except:
-        pass
-    
-    # Coba delimiter yang umum
-    delimiters = [';', ',', '\t', '|']
-    
-    for delimiter in delimiters:
-        try:
-            uploaded_file.seek(0)  # Reset file pointer
-            df = pd.read_csv(uploaded_file, sep=delimiter)
-            if len(df.columns) > 1:
-                st.info(f"Menggunakan delimiter: '{delimiter}'")
-                return df
-        except:
-            continue
-    
-    # Jika semua gagal, coba baca sebagai file dengan titik koma
-    try:
-        uploaded_file.seek(0)
-        # Baca sebagai string dan proses manual
-        lines = content.strip().split('\n')
-        if lines:
-            # Cari delimiter dengan menghitung kemunculan karakter
-            first_line = lines[0]
-            delimiter_counts = {
-                ';': first_line.count(';'),
-                ',': first_line.count(','),
-                '\t': first_line.count('\t'),
-                '|': first_line.count('|')
-            }
-            best_delimiter = max(delimiter_counts, key=delimiter_counts.get)
-            if delimiter_counts[best_delimiter] > 0:
-                df = pd.read_csv(io.StringIO(content), sep=best_delimiter)
-                st.info(f"Menggunakan delimiter terbaik: '{best_delimiter}'")
-                return df
-    except Exception as e:
-        st.error(f"Gagal membaca file: {str(e)}")
-    
-    return None
-
 def load_default_dataset():
     """Load dataset default dari data yang diberikan"""
-    try:
-        # Membaca dari data yang disediakan dalam format asli
-        data_text = """Nama;Studi_Jurusan;Semester;AI_Tools;Trust_Level;Usage_Intensity_Score
-Althaf Rayyan Putra;Teknologi Informasi;7;Gemini;4;8
-Ayesha Kinanti;Teknologi Informasi;3;Gemini;4;9
-Salsabila Nurfadila;Teknik Informatika;1;Gemini;5;3
-Anindya Safira;Teknik Informatika;5;Gemini;4;6
-Iqbal Ramadhan;Farmasi;1;Gemini;5;10+
-Muhammad Rizky Pratama;Teknologi Informasi;5;Gemini;4;4
-Fikri Alfarizi;Teknologi Informasi;1;ChatGPT;4;7
-Iqbal Ramadhan;Farmasi;1;Gemini;5;9
-Citra Maharani;Keperawatan;5;Multiple;4;2
-Iqbal Ramadhan;Farmasi;3;Gemini;5;9
-Zidan Harits;Farmasi;7;Gemini;4;4
-Rizky Kurniawan Putra;Teknik Informatika;5;ChatGPT;4;3
-Raka Bimantara;Farmasi;3;ChatGPT;4;4
-Zahra Alya Safitri;Teknik Informatika;3;Gemini;4;10+
-Muhammad Naufal Haidar;Farmasi;1;Gemini;4;3
-Citra Maharani;Keperawatan;1;Copilot;5;8
-Ammar Zaky Firmansyah;Farmasi;3;ChatGPT;5;7
-Ilham Nurhadi;Teknologi Informasi;1;Gemini;5;9
-Muhammad Rizky Pratama;Teknologi Informasi;1;Multiple;5;3
-Nayla Syakira;Teknologi Informasi;7;ChatGPT;4;8
-Zidan Harits;Farmasi;3;Gemini;5;10+
-Citra Maharani;Keperawatan;5;ChatGPT;2;8
-Arfan Maulana;Teknik Informatika;7;ChatGPT;1;2
-Nabila Khairunnisa;Teknologi Informasi;1;Gemini;5;9
-Safira Azzahra Putri;Teknologi Informasi;1;Gemini;5;7
-Farah Amalia;Teknologi Informasi;1;ChatGPT;5;6
-Muhammad Reza Ananda;Teknologi Informasi;1;ChatGPT;5;4
-Citra Maharani;Keperawatan;5;ChatGPT;1;3
-Aulia Rahma;Teknik Informatika;3;Gemini;1;2
-Yusuf Al Hakim;Teknik Informatika;5;ChatGPT;3;8
-Salsabila Nurfadila;Teknik Informatika;1;Multiple;4;3
-Aulia Rahma;Teknik Informatika;5;ChatGPT;4;10+
-Ayesha Kinanti;Teknologi Informasi;1;Copilot;3;4
-Damar Alif Prakoso;Teknologi Informasi;7;ChatGPT;4;3
-Zidan Harits;Farmasi;5;ChatGPT;2;7
-Ammar Zaky Firmansyah;Farmasi;1;ChatGPT;4;10+
-Citra Maharani;Keperawatan;3;Gemini;4;8
-Nabila Khairunnisa;Teknologi Informasi;1;Copilot;5;6
-Farah Amalia;Teknologi Informasi;7;ChatGPT;4;6
-Ammar Zaky Firmansyah;Farmasi;1;Gemini;4;2
-Zidan Harits;Farmasi;7;ChatGPT;2;1
-Farah Amalia;Teknologi Informasi;5;ChatGPT;3;5
-Ahmad Fauzan Maulana;Farmasi;1;Copilot;4;7
-Khansa Humaira Zahira;Teknik Informatika;1;ChatGPT;4;7
-Salsabila Nurfadila;Teknik Informatika;1;Multiple;3;5"""
-        
-        # Parse data dengan pandas
-        from io import StringIO
-        df = pd.read_csv(StringIO(data_text), sep=';')
-        
-        # Konversi tipe data
-        df['Semester'] = pd.to_numeric(df['Semester'], errors='coerce')
-        df['Trust_Level'] = pd.to_numeric(df['Trust_Level'], errors='coerce')
-        
-        return df
-    except Exception as e:
-        st.error(f"Error loading default dataset: {str(e)}")
-        # Fallback ke data minimal
-        data = {
-            'Nama': [
-                'Althaf Rayyan Putra', 'Ayesha Kinanti', 'Salsabila Nurfadila', 
-                'Anindya Safira', 'Iqbal Ramadhan', 'Muhammad Rizky Pratama'
-            ],
-            'Studi_Jurusan': [
-                'Teknologi Informasi', 'Teknologi Informasi', 'Teknik Informatika',
-                'Teknik Informatika', 'Farmasi', 'Teknologi Informasi'
-            ],
-            'Semester': [7, 3, 1, 5, 1, 5],
-            'AI_Tools': ['Gemini', 'Gemini', 'Gemini', 'Gemini', 'Gemini', 'Gemini'],
-            'Trust_Level': [4, 4, 5, 4, 5, 4],
-            'Usage_Intensity_Score': [8, 9, 3, 6, 10, 4]
-        }
-        
-        df = pd.DataFrame(data)
-        return df
+    data = {
+        'Nama': [
+            'Althaf Rayyan Putra', 'Ayesha Kinanti', 'Salsabila Nurfadila', 'Anindya Safira',
+            'Iqbal Ramadhan', 'Muhammad Rizky Pratama', 'Fikri Alfarizi', 'Iqbal Ramadhan',
+            'Citra Maharani', 'Iqbal Ramadhan', 'Zidan Harits', 'Rizky Kurniawan Putra',
+            'Raka Bimantara', 'Zahra Alya Safitri', 'Muhammad Naufal Haidar', 'Citra Maharani',
+            'Ammar Zaky Firmansyah', 'Ilham Nurhadi', 'Muhammad Rizky Pratama', 'Nayla Syakira',
+            'Zidan Harits', 'Citra Maharani', 'Arfan Maulana', 'Nabila Khairunnisa',
+            'Safira Azzahra Putri', 'Farah Amalia', 'Muhammad Reza Ananda', 'Citra Maharani',
+            'Aulia Rahma', 'Yusuf Al Hakim', 'Salsabila Nurfadila', 'Aulia Rahma',
+            'Ayesha Kinanti', 'Damar Alif Prakoso', 'Zidan Harits', 'Ammar Zaky Firmansyah',
+            'Citra Maharani', 'Nabila Khairunnisa', 'Farah Amalia', 'Ammar Zaky Firmansyah',
+            'Zidan Harits', 'Farah Amalia', 'Ahmad Fauzan Maulana', 'Khansa Humaira Zahira'
+        ],
+        'Studi_Jurusan': [
+            'Teknologi Informasi', 'Teknologi Informasi', 'Teknik Informatika', 'Teknik Informatika',
+            'Farmasi', 'Teknologi Informasi', 'Teknologi Informasi', 'Farmasi',
+            'Keperawatan', 'Farmasi', 'Farmasi', 'Teknik Informatika',
+            'Farmasi', 'Teknik Informatika', 'Farmasi', 'Keperawatan',
+            'Farmasi', 'Teknologi Informasi', 'Teknologi Informasi', 'Teknologi Informasi',
+            'Farmasi', 'Keperawatan', 'Teknik Informatika', 'Teknologi Informasi',
+            'Teknologi Informasi', 'Teknologi Informasi', 'Teknologi Informasi', 'Keperawatan',
+            'Teknik Informatika', 'Teknik Informatika', 'Teknik Informatika', 'Teknik Informatika',
+            'Teknologi Informasi', 'Teknologi Informasi', 'Farmasi', 'Farmasi',
+            'Keperawatan', 'Teknologi Informasi', 'Teknologi Informasi', 'Farmasi',
+            'Farmasi', 'Teknologi Informasi', 'Farmasi', 'Teknik Informatika'
+        ],
+        'Semester': [7, 3, 1, 5, 1, 5, 1, 3, 5, 3, 7, 5, 3, 3, 1, 1, 3, 1, 1, 7,
+                     3, 5, 7, 1, 1, 1, 1, 5, 3, 5, 1, 5, 1, 7, 3, 1, 3, 1, 7, 1,
+                     7, 5, 1, 1],
+        'AI_Tools': [
+            'Gemini', 'Gemini', 'Gemini', 'Gemini', 'Gemini', 'Gemini', 'ChatGPT', 'Gemini',
+            'Multiple', 'Gemini', 'Gemini', 'ChatGPT', 'ChatGPT', 'Gemini', 'Gemini', 'Copilot',
+            'ChatGPT', 'Gemini', 'Multiple', 'ChatGPT', 'Gemini', 'ChatGPT', 'ChatGPT', 'Gemini',
+            'Gemini', 'ChatGPT', 'ChatGPT', 'ChatGPT', 'Gemini', 'ChatGPT', 'Multiple', 'ChatGPT',
+            'Copilot', 'ChatGPT', 'ChatGPT', 'ChatGPT', 'Gemini', 'Copilot', 'ChatGPT', 'Gemini',
+            'ChatGPT', 'ChatGPT', 'Copilot', 'ChatGPT'
+        ],
+        'Trust_Level': [4, 4, 5, 4, 5, 4, 4, 5, 4, 5, 4, 4, 4, 4, 4, 5, 5, 5, 5, 4,
+                        5, 2, 1, 5, 5, 5, 4, 1, 1, 3, 4, 4, 3, 4, 2, 4, 4, 5, 4, 4,
+                        2, 3, 4, 4],
+        'Usage_Intensity_Score': [
+            8, 9, 3, 6, 10, 4, 7, 9, 2, 9, 4, 3, 4, 10, 3, 8, 7, 9, 3, 8,
+            10, 8, 2, 9, 7, 6, 3, 3, 2, 8, 3, 10, 4, 3, 7, 10, 8, 6, 6, 2,
+            1, 5, 7, 7
+        ]
+    }
+    
+    df = pd.DataFrame(data)
+    return df
 
 def validate_dataset(df):
     """Validasi dataset yang diupload"""
     required_columns = ['Nama', 'Studi_Jurusan', 'Semester', 'AI_Tools', 'Trust_Level', 'Usage_Intensity_Score']
     
-    # Check if dataframe is empty
-    if df is None or len(df) == 0:
-        return False, "Dataset kosong"
-    
-    # Normalize column names: strip whitespace, lower case
-    df.columns = [str(col).strip() for col in df.columns]
-    
-    # Case-insensitive column matching
-    df_columns_lower = [col.lower().strip() for col in df.columns]
-    required_columns_lower = [col.lower().strip() for col in required_columns]
-    
-    # Check for matching columns
-    missing_columns = []
-    column_mapping = {}
-    
-    for req_col, req_lower in zip(required_columns, required_columns_lower):
-        found = False
-        for df_col, df_lower in zip(df.columns, df_columns_lower):
-            if req_lower == df_lower:
-                column_mapping[req_col] = df_col
-                found = True
-                break
-        
-        if not found:
-            # Try partial match
-            for df_col, df_lower in zip(df.columns, df_columns_lower):
-                if req_lower in df_lower or df_lower in req_lower:
-                    column_mapping[req_col] = df_col
-                    found = True
-                    st.info(f"Kolom '{df_col}' dianggap sebagai '{req_col}'")
-                    break
-            
-            if not found:
-                missing_columns.append(req_col)
-    
+    # Check required columns
+    missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
-        return False, f"Kolom yang hilang: {', '.join(missing_columns)}. Kolom yang ditemukan: {', '.join(df.columns)}"
+        return False, f"Kolom yang hilang: {', '.join(missing_columns)}"
     
-    # Rename columns to standard names
-    for req_col, df_col in column_mapping.items():
-        if req_col != df_col:
-            df.rename(columns={df_col: req_col}, inplace=True)
-    
-    # Check data types and convert
+    # Check data types
     try:
-        # Convert Semester to numeric
-        df['Semester'] = pd.to_numeric(df['Semester'], errors='coerce')
-        
-        # Convert Trust_Level to numeric
-        df['Trust_Level'] = pd.to_numeric(df['Trust_Level'], errors='coerce')
-        
-        # Handle Usage_Intensity_Score - convert '10+' to 10
-        def convert_score(x):
-            if pd.isna(x):
-                return np.nan
-            x_str = str(x).strip()
-            if x_str == '10+':
-                return 10
-            try:
-                return float(x_str)
-            except:
-                return np.nan
-        
-        df['Usage_Intensity_Score'] = df['Usage_Intensity_Score'].apply(convert_score)
-        
-        # Check for missing values
-        missing_info = {}
-        for col in required_columns:
-            missing_count = df[col].isnull().sum()
-            if missing_count > 0:
-                missing_info[col] = missing_count
-        
-        if missing_info:
-            missing_msg = ", ".join([f"{col}: {count}" for col, count in missing_info.items()])
-            st.warning(f"Terdapat nilai kosong: {missing_msg}")
-        
-        # Check score range
-        valid_scores = df['Usage_Intensity_Score'].dropna()
-        if len(valid_scores) > 0:
-            min_score = valid_scores.min()
-            max_score = valid_scores.max()
-            if min_score < 1 or max_score > 10:
-                st.warning(f"Skor berada di luar range normal (1-10): {min_score} - {max_score}")
-        
-        return True, "Dataset valid"
-        
+        df['Semester'] = pd.to_numeric(df['Semester'])
+        df['Trust_Level'] = pd.to_numeric(df['Trust_Level'])
+        df['Usage_Intensity_Score'] = df['Usage_Intensity_Score'].astype(str).apply(
+            lambda x: 10 if x.strip() == '10+' else float(x)
+        )
     except Exception as e:
         return False, f"Error konversi tipe data: {str(e)}"
+    
+    # Check for empty values
+    if df[required_columns].isnull().any().any():
+        return False, "Dataset mengandung nilai kosong (null)"
+    
+    # Validate score range
+    invalid_scores = df[~df['Usage_Intensity_Score'].between(1, 10)]
+    if not invalid_scores.empty:
+        return False, f"Terdapat {len(invalid_scores)} data dengan skor di luar range 1-10"
+    
+    return True, "Dataset valid"
 
 def clean_data(df):
     """Pembersihan data"""
-    if df is None or len(df) == 0:
-        return df
-    
     df_clean = df.copy()
     
-    # Remove duplicate entries (keep first)
+    # Handle duplicate entries (keep first)
     df_clean = df_clean.drop_duplicates(subset=['Nama'], keep='first')
     
     # Convert Usage_Intensity_Score to numeric
-    def convert_score(x):
-        if pd.isna(x):
-            return np.nan
-        x_str = str(x).strip()
-        if x_str == '10+':
-            return 10
-        try:
-            return float(x_str)
-        except:
-            return np.nan
-    
-    df_clean['Usage_Intensity_Score'] = df_clean['Usage_Intensity_Score'].apply(convert_score)
+    df_clean['Usage_Intensity_Score'] = df_clean['Usage_Intensity_Score'].apply(
+        lambda x: 10 if str(x).strip() == '10+' else float(x)
+    )
     
     # Handle missing values
     for col in ['Semester', 'Trust_Level', 'Usage_Intensity_Score']:
-        if col in df_clean.columns and df_clean[col].isnull().any():
-            if col in ['Semester', 'Trust_Level']:
-                df_clean[col] = df_clean[col].fillna(df_clean[col].median())
-            elif col == 'Usage_Intensity_Score':
-                df_clean[col] = df_clean[col].fillna(df_clean[col].mean())
+        if df_clean[col].isnull().any():
+            df_clean[col] = df_clean[col].fillna(df_clean[col].median())
     
-    # Validate score range (1-10) and filter out invalid
-    mask = df_clean['Usage_Intensity_Score'].between(1, 10) | df_clean['Usage_Intensity_Score'].isna()
-    df_clean = df_clean[mask].copy()
-    
-    # Fill any remaining NaN in scores with median
-    if df_clean['Usage_Intensity_Score'].isnull().any():
-        df_clean['Usage_Intensity_Score'] = df_clean['Usage_Intensity_Score'].fillna(
-            df_clean['Usage_Intensity_Score'].median()
-        )
-    
-    # Reset index
-    df_clean = df_clean.reset_index(drop=True)
+    # Validate score range
+    df_clean = df_clean[df_clean['Usage_Intensity_Score'].between(1, 10)]
     
     return df_clean
 
 def encode_categorical_data(df):
     """Encode data kategorikal"""
-    if df is None or len(df) == 0:
-        return df, {}
-    
     df_encoded = df.copy()
     encoders = {}
     
     # Encode Studi_Jurusan
-    if 'Studi_Jurusan' in df_encoded.columns:
-        le_jurusan = LabelEncoder()
-        df_encoded['Studi_Jurusan_Encoded'] = le_jurusan.fit_transform(df_encoded['Studi_Jurusan'])
-        encoders['Studi_Jurusan'] = le_jurusan
+    le_jurusan = LabelEncoder()
+    df_encoded['Studi_Jurusan_Encoded'] = le_jurusan.fit_transform(df_encoded['Studi_Jurusan'])
+    encoders['Studi_Jurusan'] = le_jurusan
     
     # Encode AI_Tools
-    if 'AI_Tools' in df_encoded.columns:
-        le_tools = LabelEncoder()
-        df_encoded['AI_Tools_Encoded'] = le_tools.fit_transform(df_encoded['AI_Tools'])
-        encoders['AI_Tools'] = le_tools
+    le_tools = LabelEncoder()
+    df_encoded['AI_Tools_Encoded'] = le_tools.fit_transform(df_encoded['AI_Tools'])
+    encoders['AI_Tools'] = le_tools
     
     # Create target variable (klasifikasi penggunaan)
-    if 'Usage_Intensity_Score' in df_encoded.columns:
-        kb = KnowledgeBaseSystem()
-        df_encoded['Usage_Level'] = df_encoded['Usage_Intensity_Score'].apply(kb.classify_usage)
-        
-        # Encode target variable
-        le_target = LabelEncoder()
-        df_encoded['Usage_Level_Encoded'] = le_target.fit_transform(df_encoded['Usage_Level'])
-        encoders['Usage_Level'] = le_target
+    kb = KnowledgeBaseSystem()
+    df_encoded['Usage_Level'] = df_encoded['Usage_Intensity_Score'].apply(kb.classify_usage)
+    
+    # Encode target variable
+    le_target = LabelEncoder()
+    df_encoded['Usage_Level_Encoded'] = le_target.fit_transform(df_encoded['Usage_Level'])
+    encoders['Usage_Level'] = le_target
     
     return df_encoded, encoders
 
 def prepare_features(df_encoded):
     """Persiapkan fitur untuk model"""
-    if df_encoded is None or len(df_encoded) == 0:
-        return None, None, None, []
-    
-    features = []
-    
-    # Add basic features
-    if 'Semester' in df_encoded.columns:
-        features.append('Semester')
-    if 'Trust_Level' in df_encoded.columns:
-        features.append('Trust_Level')
-    
-    # Add encoded features if they exist
-    if 'Studi_Jurusan_Encoded' in df_encoded.columns:
-        features.append('Studi_Jurusan_Encoded')
-    if 'AI_Tools_Encoded' in df_encoded.columns:
-        features.append('AI_Tools_Encoded')
-    
-    if not features:
-        return None, None, None, []
-    
+    features = ['Semester', 'Trust_Level', 'Studi_Jurusan_Encoded', 'AI_Tools_Encoded']
     X = df_encoded[features]
-    
-    # Check if target exists
-    if 'Usage_Level_Encoded' in df_encoded.columns:
-        y = df_encoded['Usage_Level_Encoded']
-    else:
-        # If no target, create simple target based on score
-        kb = KnowledgeBaseSystem()
-        y = df_encoded['Usage_Intensity_Score'].apply(kb.classify_usage)
-        le = LabelEncoder()
-        y = le.fit_transform(y)
+    y = df_encoded['Usage_Level_Encoded']
     
     # Scale features
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     
-    return X_scaled, y, scaler, features
+    return X_scaled, y, scaler
 
 def train_random_forest(X, y):
     """Train model Random Forest"""
-    if X is None or y is None or len(X) == 0:
-        return None
-    
     # Split data
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
@@ -707,15 +495,56 @@ def train_random_forest(X, y):
         'f1_score': f1
     }
 
+def create_visualizations(df, predictions):
+    """Buat visualisasi data"""
+    # Create subplots
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=('Distribusi Tingkat Penggunaan AI', 
+                       'Penggunaan AI per Jurusan',
+                       'Hubungan Trust Level vs Penggunaan',
+                       'Tools AI yang Digunakan'),
+        specs=[[{'type': 'pie'}, {'type': 'bar'}],
+               [{'type': 'scatter'}, {'type': 'bar'}]]
+    )
+    
+    # 1. Pie chart for usage distribution
+    usage_counts = predictions['Usage_Level'].value_counts()
+    fig.add_trace(
+        go.Pie(labels=usage_counts.index, values=usage_counts.values, hole=0.3),
+        row=1, col=1
+    )
+    
+    # 2. Bar chart for usage per jurusan
+    jurusan_usage = df.groupby('Studi_Jurusan')['Usage_Intensity_Score'].mean().reset_index()
+    fig.add_trace(
+        go.Bar(x=jurusan_usage['Studi_Jurusan'], y=jurusan_usage['Usage_Intensity_Score']),
+        row=1, col=2
+    )
+    
+    # 3. Scatter plot for trust vs usage
+    fig.add_trace(
+        go.Scatter(x=df['Trust_Level'], y=df['Usage_Intensity_Score'],
+                  mode='markers', marker=dict(size=10, color=df['Usage_Intensity_Score'])),
+        row=2, col=1
+    )
+    
+    # 4. Bar chart for AI tools usage
+    tools_count = df['AI_Tools'].value_counts()
+    fig.add_trace(
+        go.Bar(x=tools_count.index, y=tools_count.values),
+        row=2, col=2
+    )
+    
+    fig.update_layout(height=800, showlegend=False, title_text="Analisis Penggunaan AI Mahasiswa")
+    return fig
+
 def get_download_link(df, filename="dataset.csv", text="Download CSV"):
     """Generate download link for CSV file"""
-    try:
-        csv = df.to_csv(index=False, sep=';')
-        b64 = base64.b64encode(csv.encode()).decode()
-        href = f'<a href="data:file/csv;base64,{b64}" download="{filename}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; border-radius: 5px;">{text}</a>'
-        return href
-    except:
-        return ""
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()
+    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; border-radius: 5px;">{text}</a>'
+    return href
 
 def show_score_interpretation_table():
     """Tampilkan tabel interpretasi skor"""
@@ -834,9 +663,73 @@ def login_page():
         **Format Dataset:**
         - File CSV dengan kolom: Nama, Studi_Jurusan, Semester, AI_Tools, Trust_Level, Usage_Intensity_Score
         - Usage_Intensity_Score: Skala 1-10 (10+ = 10)
-        - Pemisah: titik koma (;) atau koma (,)
         """)
         st.markdown("</div>", unsafe_allow_html=True)
+
+def guru_dashboard():
+    """Dashboard untuk Guru/Dosen"""
+    st.markdown("<h1 class='main-header'>🧑‍🏫 Dashboard Guru/Dosen</h1>", unsafe_allow_html=True)
+    
+    # Initialize knowledge base
+    if st.session_state.knowledge_base is None:
+        st.session_state.knowledge_base = KnowledgeBaseSystem()
+    
+    # Sidebar menu
+    with st.sidebar:
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown("### 📊 Menu Analisis")
+        menu = st.radio(
+            "Pilih Menu:",
+            ["📁 Upload Dataset", "📋 Interpretasi Skor", "🧹 Data Cleaning", "🔧 Data Processing", 
+             "🤖 Model Training", "📈 Evaluasi Model", "🎯 Rekomendasi", "📊 Dashboard Analitik"]
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Data source info
+        if st.session_state.data_source:
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
+            st.markdown("### 📂 Sumber Data")
+            if st.session_state.data_source == "uploaded":
+                st.success("✅ Dataset dari file upload")
+            else:
+                st.info("📊 Dataset default")
+            st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Show score interpretation in sidebar
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown("### 🎯 Klasifikasi Skor")
+        st.markdown("""
+        **RENDAH (1-3):** Aman  
+        **SEDANG (4-7):** Perlu Perhatian  
+        **TINGGI (8-10+):** Butuh Pengawasan
+        """)
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Logout button
+        if st.button("🚪 Logout"):
+            st.session_state.authenticated = False
+            st.session_state.user_role = None
+            st.session_state.uploaded_file = None
+            st.session_state.data_source = "default"
+            st.rerun()
+    
+    # Main content based on menu
+    if menu == "📁 Upload Dataset":
+        upload_dataset_section()
+    elif menu == "📋 Interpretasi Skor":
+        score_interpretation_section()
+    elif menu == "🧹 Data Cleaning":
+        data_cleaning_section()
+    elif menu == "🔧 Data Processing":
+        data_processing()
+    elif menu == "🤖 Model Training":
+        model_training()
+    elif menu == "📈 Evaluasi Model":
+        model_evaluation()
+    elif menu == "🎯 Rekomendasi":
+        recommendations_section()
+    elif menu == "📊 Dashboard Analitik":
+        analytics_dashboard()
 
 def upload_dataset_section():
     """Section untuk upload dataset"""
@@ -852,7 +745,6 @@ def upload_dataset_section():
             <li>File harus dalam format CSV</li>
             <li>Encoding: UTF-8</li>
             <li>Usage_Intensity_Score: skala 1-10 (10+ akan dikonversi ke 10)</li>
-            <li>Pemisah kolom: titik koma (;) atau koma (,)</li>
         </ul>
     </div>
     """, unsafe_allow_html=True)
@@ -867,25 +759,18 @@ def upload_dataset_section():
         uploaded_file = st.file_uploader(
             "Pilih file CSV",
             type=["csv"],
-            help="Upload dataset dalam format CSV. Sistem akan mendeteksi delimiter otomatis."
+            help="Upload dataset dalam format CSV"
         )
     
     with col2:
         st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
-        use_default = st.button("📊 Gunakan Dataset Default", use_container_width=True)
+        use_default = st.button("📊 Gunakan Dataset Default")
     
     # Handle file upload
     if uploaded_file is not None:
         try:
-            # Read the CSV file with automatic delimiter detection
-            df = read_csv_with_various_delimiters(uploaded_file)
-            
-            if df is None:
-                st.error("Gagal membaca file CSV. Pastikan format file benar.")
-                return
-            
-            # Show detected columns
-            st.info(f"Kolom yang terdeteksi: {', '.join(df.columns.tolist())}")
+            # Read the CSV file
+            df = pd.read_csv(uploaded_file)
             
             # Validate the dataset
             is_valid, message = validate_dataset(df)
@@ -896,11 +781,12 @@ def upload_dataset_section():
                 st.session_state.data_source = "uploaded"
                 
                 # Clear previous processed data
-                st.session_state.df_clean = None
-                st.session_state.model = None
-                st.session_state.results = None
-                st.session_state.predictions = None
-                st.session_state.knowledge_base = None
+                if 'df_clean' in st.session_state:
+                    del st.session_state.df_clean
+                if 'model' in st.session_state:
+                    del st.session_state.model
+                if 'results' in st.session_state:
+                    del st.session_state.results
                 
                 st.success(f"✅ Dataset berhasil diupload: {uploaded_file.name}")
                 
@@ -912,29 +798,16 @@ def upload_dataset_section():
                 st.markdown(f"- **Jumlah kolom:** {len(df.columns)}")
                 st.markdown(f"- **Kolom:** {', '.join(df.columns.tolist())}")
                 
-                # Show basic statistics
-                if 'Usage_Intensity_Score' in df.columns:
-                    # Convert scores for statistics
-                    def get_score_val(x):
-                        try:
-                            x_str = str(x).strip()
-                            if x_str == '10+':
-                                return 10
-                            return float(x_str)
-                        except:
-                            return np.nan
-                    
-                    scores = df['Usage_Intensity_Score'].apply(get_score_val).dropna()
-                    if len(scores) > 0:
-                        st.markdown("**📈 Statistik Skor:**")
-                        st.markdown(f"- Rata-rata: {scores.mean():.2f}")
-                        st.markdown(f"- Minimum: {scores.min():.0f}")
-                        st.markdown(f"- Maximum: {scores.max():.0f}")
+                # Show score distribution
+                st.markdown("**📈 Distribusi Skor:**")
+                score_counts = df['Usage_Intensity_Score'].value_counts().sort_index()
+                for score, count in score_counts.items():
+                    st.markdown(f"  - Skor {score}: {count} mahasiswa")
                 
                 st.markdown("</div>", unsafe_allow_html=True)
                 
                 # Show data preview
-                st.subheader("👀 Preview Data (10 baris pertama)")
+                st.subheader("👀 Preview Data")
                 st.dataframe(df.head(10), use_container_width=True)
                 
                 # Download template button
@@ -958,76 +831,47 @@ def upload_dataset_section():
                 
             else:
                 st.error(f"❌ Dataset tidak valid: {message}")
-                st.info("""
-                **Tips untuk memperbaiki dataset:**
-                1. Pastikan file CSV memiliki 6 kolom: Nama, Studi_Jurusan, Semester, AI_Tools, Trust_Level, Usage_Intensity_Score
-                2. Gunakan titik koma (;) sebagai pemisah kolom
-                3. Pastikan tidak ada baris kosong di awal file
-                4. Usage_Intensity_Score harus angka 1-10 atau '10+'
-                5. Download template di atas untuk contoh format yang benar
-                """)
-                
-                # Show what was read
-                st.subheader("Data yang terbaca:")
-                st.dataframe(df.head(), use_container_width=True)
+                st.info("Pastikan dataset memiliki kolom yang diperlukan dan format yang benar.")
                 
         except Exception as e:
             st.error(f"Error membaca file: {str(e)}")
-            st.info("Pastikan file CSV menggunakan format yang benar. Coba download template di atas.")
     
     # Handle default dataset
     elif use_default:
-        with st.spinner("Memuat dataset default..."):
-            df = load_default_dataset()
-            
-            if df is not None and len(df) > 0:
-                st.session_state.df = df
-                st.session_state.data_source = "default"
-                st.session_state.uploaded_file = None
-                
-                # Clear previous processed data
-                st.session_state.df_clean = None
-                st.session_state.model = None
-                st.session_state.results = None
-                st.session_state.predictions = None
-                st.session_state.knowledge_base = None
-                
-                st.success("✅ Dataset default berhasil dimuat!")
-                
-                # Show dataset info
-                st.markdown("<div class='file-info'>", unsafe_allow_html=True)
-                st.markdown(f"**📊 Info Dataset:**")
-                st.markdown(f"- **Sumber:** Dataset Default")
-                st.markdown(f"- **Jumlah data:** {len(df)} baris")
-                st.markdown(f"- **Jumlah kolom:** {len(df.columns)}")
-                st.markdown(f"- **Kolom:** {', '.join(df.columns.tolist())}")
-                
-                # Show basic statistics
-                if 'Usage_Intensity_Score' in df.columns:
-                    # Convert scores for statistics
-                    def get_score_val(x):
-                        try:
-                            x_str = str(x).strip()
-                            if x_str == '10+':
-                                return 10
-                            return float(x_str)
-                        except:
-                            return np.nan
-                    
-                    scores = df['Usage_Intensity_Score'].apply(get_score_val).dropna()
-                    if len(scores) > 0:
-                        st.markdown("**📈 Statistik Skor:**")
-                        st.markdown(f"- Rata-rata: {scores.mean():.2f}")
-                        st.markdown(f"- Minimum: {scores.min():.0f}")
-                        st.markdown(f"- Maximum: {scores.max():.0f}")
-                
-                st.markdown("</div>", unsafe_allow_html=True)
-                
-                # Show data preview
-                st.subheader("👀 Preview Data")
-                st.dataframe(df.head(10), use_container_width=True)
-            else:
-                st.error("Gagal memuat dataset default")
+        st.session_state.df = load_default_dataset()
+        st.session_state.data_source = "default"
+        st.session_state.uploaded_file = None
+        
+        # Clear previous processed data
+        if 'df_clean' in st.session_state:
+            del st.session_state.df_clean
+        if 'model' in st.session_state:
+            del st.session_state.model
+        if 'results' in st.session_state:
+            del st.session_state.results
+        
+        st.success("✅ Dataset default berhasil dimuat!")
+        
+        # Show dataset info
+        df = st.session_state.df
+        st.markdown("<div class='file-info'>", unsafe_allow_html=True)
+        st.markdown(f"**📊 Info Dataset:**")
+        st.markdown(f"- **Sumber:** Dataset Default")
+        st.markdown(f"- **Jumlah data:** {len(df)} baris")
+        st.markdown(f"- **Jumlah kolom:** {len(df.columns)}")
+        st.markdown(f"- **Kolom:** {', '.join(df.columns.tolist())}")
+        
+        # Show score distribution
+        st.markdown("**📈 Distribusi Skor:**")
+        score_counts = df['Usage_Intensity_Score'].value_counts().sort_index()
+        for score, count in score_counts.items():
+            st.markdown(f"  - Skor {score}: {count} mahasiswa")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+        # Show data preview
+        st.subheader("👀 Preview Data")
+        st.dataframe(df.head(10), use_container_width=True)
     
     # Show current dataset if exists
     elif st.session_state.df is not None:
@@ -1043,41 +887,19 @@ def upload_dataset_section():
         with col2:
             st.metric("Jumlah Data", len(df))
         with col3:
-            if 'Usage_Intensity_Score' in df.columns:
-                # Convert scores for min/max calculation
-                def get_score_val(x):
-                    try:
-                        x_str = str(x).strip()
-                        if x_str == '10+':
-                            return 10
-                        return float(x_str)
-                    except:
-                        return np.nan
-                
-                scores = df['Usage_Intensity_Score'].apply(get_score_val).dropna()
-                if len(scores) > 0:
-                    st.metric("Rentang Skor", f"{scores.min():.0f}-{scores.max():.0f}")
-                else:
-                    st.metric("Rentang Skor", "N/A")
+            st.metric("Rentang Skor", f"{df['Usage_Intensity_Score'].min()}-{df['Usage_Intensity_Score'].max()}")
         with col4:
-            if 'Usage_Intensity_Score' in df.columns:
-                scores = df['Usage_Intensity_Score'].apply(get_score_val).dropna()
-                if len(scores) > 0:
-                    st.metric("Skor Rata-rata", f"{scores.mean():.1f}")
-                else:
-                    st.metric("Skor Rata-rata", "N/A")
+            st.metric("Skor Rata-rata", f"{df['Usage_Intensity_Score'].mean():.1f}")
         
         # Data preview
         st.dataframe(df.head(10), use_container_width=True)
         
         # Option to clear dataset
-        if st.button("🗑️ Hapus Dataset Saat Ini", use_container_width=True):
+        if st.button("🗑️ Hapus Dataset Saat Ini"):
             st.session_state.df = None
             st.session_state.df_clean = None
             st.session_state.model = None
             st.session_state.results = None
-            st.session_state.predictions = None
-            st.session_state.knowledge_base = None
             st.session_state.uploaded_file = None
             st.session_state.data_source = "default"
             st.rerun()
@@ -1133,7 +955,7 @@ def score_interpretation_section():
     
     with col2:
         st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
-        check_button = st.button("📊 Interpretasi Skor", use_container_width=True)
+        check_button = st.button("📊 Interpretasi Skor")
     
     if check_button:
         kb = KnowledgeBaseSystem()
@@ -1162,6 +984,7 @@ def score_interpretation_section():
             <h3>{icon} Skor {score_input}: {classification}</h3>
             <p><strong>Frekuensi:</strong> {interpretation['frequency']}</p>
             <p><strong>Deskripsi:</strong> {interpretation['description']}</p>
+            <p><strong>Rekomendasi Umum:</strong> {kb.rules.get(classification, {}).get('label', 'Data tidak valid')}</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1187,119 +1010,119 @@ def data_cleaning_section():
     # Show data before cleaning
     st.subheader("📊 Data Sebelum Cleaning")
     
-    # Convert scores for visualization
-    def get_score_val(x):
-        try:
-            x_str = str(x).strip()
-            if x_str == '10+':
-                return 10
-            return float(x_str)
-        except:
-            return np.nan
+    # Score distribution visualization
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
     
-    scores = df['Usage_Intensity_Score'].apply(get_score_val) if 'Usage_Intensity_Score' in df.columns else pd.Series([])
+    # Histogram of scores
+    scores = df['Usage_Intensity_Score'].apply(lambda x: 10 if str(x) == '10+' else float(x))
+    ax1.hist(scores, bins=10, edgecolor='black', alpha=0.7, color='skyblue')
+    ax1.set_title('Distribusi Skor Penggunaan AI')
+    ax1.set_xlabel('Skor (1-10)')
+    ax1.set_ylabel('Frekuensi')
+    ax1.set_xticks(range(1, 11))
+    
+    # Box plot for outlier detection
+    ax2.boxplot(scores, vert=False)
+    ax2.set_title('Deteksi Outlier Skor')
+    ax2.set_xlabel('Skor')
+    
+    plt.tight_layout()
+    st.pyplot(fig)
     
     # Statistics before cleaning
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        duplicates = df.duplicated(subset=['Nama']).sum() if 'Nama' in df.columns else 0
+        duplicates = df.duplicated(subset=['Nama']).sum()
         st.metric("Duplikat Nama", duplicates)
     with col2:
         missing = df.isnull().sum().sum()
         st.metric("Missing Values", missing)
     with col3:
-        if 'Usage_Intensity_Score' in df.columns:
-            valid_scores = scores.dropna()
-            invalid_scores = len(df) - len(valid_scores)
-            st.metric("Skor Tidak Valid", invalid_scores)
-        else:
-            st.metric("Skor Tidak Valid", "N/A")
+        invalid_scores = (~df['Usage_Intensity_Score'].apply(
+            lambda x: 1 <= float(10 if str(x) == '10+' else x) <= 10
+        )).sum()
+        st.metric("Skor Tidak Valid", invalid_scores)
     with col4:
-        if 'Usage_Intensity_Score' in df.columns and len(scores.dropna()) > 0:
-            avg_score = scores.dropna().mean()
-            st.metric("Skor Rata-rata", f"{avg_score:.2f}")
-        else:
-            st.metric("Skor Rata-rata", "N/A")
+        avg_score = scores.mean()
+        st.metric("Skor Rata-rata", f"{avg_score:.2f}")
     
-    if st.button("🚀 Jalankan Data Cleaning", type="primary", use_container_width=True):
+    if st.button("🚀 Jalankan Data Cleaning", type="primary"):
         with st.spinner("Melakukan data cleaning..."):
             df_clean = clean_data(df)
             st.session_state.df_clean = df_clean
+            st.success("✅ Data cleaning selesai!")
             
-            if df_clean is not None and len(df_clean) > 0:
-                st.success("✅ Data cleaning selesai!")
-                
-                # Show cleaning results
-                st.subheader("📊 Hasil Data Cleaning")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.markdown("<div class='card'>", unsafe_allow_html=True)
-                    st.markdown("**Sebelum Cleaning:**")
-                    st.write(f"- Jumlah data: {len(df)}")
-                    st.write(f"- Data duplikat: {duplicates}")
-                    st.write(f"- Missing values: {missing}")
-                    if 'Usage_Intensity_Score' in df.columns:
-                        st.write(f"- Skor tidak valid: {invalid_scores}")
-                        if len(scores.dropna()) > 0:
-                            st.write(f"- Skor rata-rata: {scores.dropna().mean():.2f}")
-                    st.markdown("</div>", unsafe_allow_html=True)
-                
-                with col2:
-                    st.markdown("<div class='card success-card'>", unsafe_allow_html=True)
-                    st.markdown("**Setelah Cleaning:**")
-                    st.write(f"- Jumlah data: {len(df_clean)}")
-                    st.write(f"- Data duplikat: {df_clean.duplicated().sum()}")
-                    st.write(f"- Missing values: {df_clean.isnull().sum().sum()}")
-                    if 'Usage_Intensity_Score' in df_clean.columns:
-                        st.write(f"- Skor tidak valid: 0")
-                        st.write(f"- Skor rata-rata: {df_clean['Usage_Intensity_Score'].mean():.2f}")
-                    st.markdown("</div>", unsafe_allow_html=True)
-                
-                # Show cleaned data with classification
-                st.subheader("📋 Data Setelah Cleaning dengan Klasifikasi")
-                
-                # Add classification to cleaned data
-                kb = KnowledgeBaseSystem()
-                df_display = df_clean.copy()
-                
-                if 'Usage_Intensity_Score' in df_display.columns:
-                    df_display['Klasifikasi'] = df_display['Usage_Intensity_Score'].apply(kb.classify_usage)
-                    df_display['Frekuensi'] = df_display['Usage_Intensity_Score'].apply(
-                        lambda x: kb.get_frequency_interpretation(x)['frequency']
-                    )
-                
-                # Display with classification colors
-                def highlight_classification(val):
-                    if val == 'RENDAH':
-                        return 'background-color: #D5F4E6'
-                    elif val == 'SEDANG':
-                        return 'background-color: #FCF3CF'
-                    elif val == 'TINGGI':
-                        return 'background-color: #FADBD8'
-                    else:
-                        return ''
-                
-                # Show only selected columns
-                display_cols = []
-                for col in ['Nama', 'Studi_Jurusan', 'Semester', 'AI_Tools', 'Trust_Level', 'Usage_Intensity_Score', 'Klasifikasi', 'Frekuensi']:
-                    if col in df_display.columns:
-                        display_cols.append(col)
-                
-                if display_cols:
-                    display_df = df_display[display_cols]
-                    
-                    # Apply styling if Klasifikasi exists
-                    if 'Klasifikasi' in display_cols:
-                        styled_df = display_df.style.applymap(highlight_classification, subset=['Klasifikasi'])
-                        st.dataframe(styled_df, use_container_width=True, height=400)
-                    else:
-                        st.dataframe(display_df, use_container_width=True, height=400)
+            # Show cleaning results
+            st.subheader("📊 Hasil Data Cleaning")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("<div class='card'>", unsafe_allow_html=True)
+                st.markdown("**Sebelum Cleaning:**")
+                st.write(f"- Jumlah data: {len(df)}")
+                st.write(f"- Data duplikat: {duplicates}")
+                st.write(f"- Missing values: {missing}")
+                st.write(f"- Skor tidak valid: {invalid_scores}")
+                st.write(f"- Skor rata-rata: {avg_score:.2f}")
+                st.markdown("</div>", unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown("<div class='card success-card'>", unsafe_allow_html=True)
+                st.markdown("**Setelah Cleaning:**")
+                st.write(f"- Jumlah data: {len(df_clean)}")
+                st.write(f"- Data duplikat: {df_clean.duplicated().sum()}")
+                st.write(f"- Missing values: {df_clean.isnull().sum().sum()}")
+                st.write(f"- Skor tidak valid: 0")
+                st.write(f"- Skor rata-rata: {df_clean['Usage_Intensity_Score'].mean():.2f}")
+                st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Show cleaned data with classification
+            st.subheader("📋 Data Setelah Cleaning dengan Klasifikasi")
+            
+            # Add classification to cleaned data
+            kb = KnowledgeBaseSystem()
+            df_display = df_clean.copy()
+            df_display['Klasifikasi'] = df_display['Usage_Intensity_Score'].apply(kb.classify_usage)
+            df_display['Frekuensi'] = df_display['Usage_Intensity_Score'].apply(
+                lambda x: kb.get_frequency_interpretation(x)['frequency']
+            )
+            
+            # Color code the classification
+            def color_classification(val):
+                if val == 'RENDAH':
+                    return 'background-color: #D5F4E6'
+                elif val == 'SEDANG':
+                    return 'background-color: #FCF3CF'
+                elif val == 'TINGGI':
+                    return 'background-color: #FADBD8'
                 else:
-                    st.dataframe(df_display, use_container_width=True, height=400)
-            else:
-                st.error("Data cleaning gagal menghasilkan data yang valid")
+                    return ''
+            
+            styled_df = df_display.style.applymap(color_classification, subset=['Klasifikasi'])
+            st.dataframe(styled_df, use_container_width=True)
+            
+            # Data quality metrics
+            st.subheader("📈 Metrik Kualitas Data")
+            
+            # Calculate data quality score
+            total_rows = len(df_clean)
+            quality_metrics = {
+                'Kompleteness': 1 - (df_clean.isnull().sum().sum() / (total_rows * len(df_clean.columns))),
+                'Uniqueness': 1 - (df_clean.duplicated().sum() / total_rows),
+                'Validity': 1 - (df_clean['Usage_Intensity_Score'].apply(
+                    lambda x: not (1 <= float(x) <= 10)
+                ).sum() / total_rows),
+                'Consistency': 1 - (df_clean['Semester'].apply(
+                    lambda x: not (1 <= x <= 8)
+                ).sum() / total_rows)
+            }
+            
+            # Display quality metrics
+            quality_df = pd.DataFrame.from_dict(quality_metrics, orient='index', columns=['Score'])
+            quality_df['Score'] = quality_df['Score'].apply(lambda x: f"{x:.1%}")
+            
+            st.dataframe(quality_df, use_container_width=True)
     
     elif st.session_state.df_clean is not None:
         st.success("✅ Data sudah dibersihkan sebelumnya!")
@@ -1312,43 +1135,30 @@ def data_cleaning_section():
         # Add classification to cleaned data
         kb = KnowledgeBaseSystem()
         df_display = df_clean.copy()
+        df_display['Klasifikasi'] = df_display['Usage_Intensity_Score'].apply(kb.classify_usage)
+        df_display['Frekuensi'] = df_display['Usage_Intensity_Score'].apply(
+            lambda x: kb.get_frequency_interpretation(x)['frequency']
+        )
         
-        if 'Usage_Intensity_Score' in df_display.columns:
-            df_display['Klasifikasi'] = df_display['Usage_Intensity_Score'].apply(kb.classify_usage)
-            df_display['Frekuensi'] = df_display['Usage_Intensity_Score'].apply(
-                lambda x: kb.get_frequency_interpretation(x)['frequency']
-            )
-        
-        # Show only selected columns
-        display_cols = []
-        for col in ['Nama', 'Studi_Jurusan', 'Semester', 'AI_Tools', 'Trust_Level', 'Usage_Intensity_Score', 'Klasifikasi', 'Frekuensi']:
-            if col in df_display.columns:
-                display_cols.append(col)
-        
-        if display_cols:
-            st.dataframe(df_display[display_cols].head(10), use_container_width=True)
-        else:
-            st.dataframe(df_display.head(10), use_container_width=True)
+        st.dataframe(df_display.head(10), use_container_width=True)
         
         # Show statistics
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Total Data", len(df_clean))
         with col2:
-            if 'Usage_Intensity_Score' in df_clean.columns:
-                avg_score = df_clean['Usage_Intensity_Score'].mean()
-                st.metric("Skor Rata-rata", f"{avg_score:.2f}")
+            avg_score = df_clean['Usage_Intensity_Score'].mean()
+            st.metric("Skor Rata-rata", f"{avg_score:.2f}")
         with col3:
-            if 'Usage_Intensity_Score' in df_clean.columns:
-                high_users = (df_clean['Usage_Intensity_Score'] >= 8).sum()
-                st.metric("Pengguna Tinggi", high_users)
+            high_users = (df_clean['Usage_Intensity_Score'] >= 8).sum()
+            st.metric("Pengguna Tinggi", high_users)
         
         # Option to re-run cleaning
-        if st.button("🔄 Jalankan Ulang Data Cleaning", use_container_width=True):
+        if st.button("🔄 Jalankan Ulang Data Cleaning"):
             st.session_state.df_clean = None
             st.rerun()
 
-def data_processing_section():
+def data_processing():
     """Data processing section"""
     st.header("🔧 Data Processing & Encoding")
     
@@ -1369,110 +1179,121 @@ def data_processing_section():
     - TINGGI (8-10+): >20 kali/minggu
     """)
     
-    if st.button("⚙️ Proses Data", type="primary", use_container_width=True):
+    if st.button("⚙️ Proses Data", type="primary"):
         with st.spinner("Memproses data..."):
             # Encode categorical data
             df_encoded, encoders = encode_categorical_data(st.session_state.df_clean)
             st.session_state.encoders = encoders
             
             # Prepare features
-            X_scaled, y, scaler, features = prepare_features(df_encoded)
+            X_scaled, y, scaler = prepare_features(df_encoded)
             
-            if X_scaled is not None and y is not None:
-                # Save processed data
-                st.session_state.processed_data = {
-                    'X': X_scaled,
-                    'y': y,
-                    'df_encoded': df_encoded,
-                    'scaler': scaler,
-                    'features': features
-                }
-                
-                st.success("✅ Data processing selesai!")
-                
-                # Show encoding results
-                st.subheader("📊 Hasil Encoding")
-                
-                # Show encoded values
-                if 'Studi_Jurusan' in encoders:
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown("<div class='card'>", unsafe_allow_html=True)
-                        st.markdown("**Mapping Jurusan:**")
-                        jurusan_mapping = dict(zip(
-                            encoders['Studi_Jurusan'].classes_,
-                            range(len(encoders['Studi_Jurusan'].classes_))
-                        ))
-                        for key, value in jurusan_mapping.items():
-                            st.write(f"{key} → {value}")
-                        st.markdown("</div>", unsafe_allow_html=True)
-                
-                # Show processed data
-                st.subheader("📋 Data Setelah Processing")
-                
-                # Add frequency interpretation
-                kb = KnowledgeBaseSystem()
-                df_display = df_encoded.copy()
-                
-                if 'Usage_Intensity_Score' in df_display.columns:
-                    df_display['Frekuensi'] = df_display['Usage_Intensity_Score'].apply(
-                        lambda x: kb.get_frequency_interpretation(x)['frequency']
-                    )
-                
-                # Show selected columns
-                display_cols = []
-                for col in ['Nama', 'Studi_Jurusan', 'Semester', 'AI_Tools', 'Trust_Level', 'Usage_Intensity_Score', 'Frekuensi']:
-                    if col in df_display.columns:
-                        display_cols.append(col)
-                
-                if 'Usage_Level' in df_display.columns:
-                    display_cols.append('Usage_Level')
-                
-                if display_cols:
-                    st.dataframe(df_display[display_cols].head(), use_container_width=True)
-                
-                # Show target distribution
-                if 'Usage_Level' in df_encoded.columns:
-                    st.subheader("🎯 Distribusi Target (Usage Level)")
-                    level_counts = df_encoded['Usage_Level'].value_counts()
-                    
-                    # Create visualization
-                    fig = px.pie(values=level_counts.values, names=level_counts.index,
-                                title="Distribusi Tingkat Penggunaan AI",
-                                color=level_counts.index,
-                                color_discrete_map={
-                                    'RENDAH': '#2ECC71',
-                                    'SEDANG': '#F39C12',
-                                    'TINGGI': '#E74C3C'
-                                })
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Show statistics with frequency interpretation
-                    st.subheader("📈 Statistik Klasifikasi")
-                    
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        rendah_count = level_counts.get('RENDAH', 0)
-                        st.metric("Level Rendah", rendah_count)
-                        if rendah_count > 0:
-                            st.caption("1-5 kali/minggu")
-                    
-                    with col2:
-                        sedang_count = level_counts.get('SEDANG', 0)
-                        st.metric("Level Sedang", sedang_count)
-                        if sedang_count > 0:
-                            st.caption("6-20 kali/minggu")
-                    
-                    with col3:
-                        tinggi_count = level_counts.get('TINGGI', 0)
-                        st.metric("Level Tinggi", tinggi_count)
-                        if tinggi_count > 0:
-                            st.caption(">20 kali/minggu")
-            else:
-                st.error("Gagal memproses data. Pastikan dataset memiliki kolom yang diperlukan.")
+            # Save processed data
+            st.session_state.processed_data = {
+                'X': X_scaled,
+                'y': y,
+                'df_encoded': df_encoded,
+                'scaler': scaler
+            }
+            
+            st.success("✅ Data processing selesai!")
+            
+            # Show encoding results
+            st.subheader("📊 Hasil Encoding")
+            
+            # Show encoded values
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("<div class='card'>", unsafe_allow_html=True)
+                st.markdown("**Mapping Jurusan:**")
+                jurusan_mapping = dict(zip(
+                    st.session_state.encoders['Studi_Jurusan'].classes_,
+                    range(len(st.session_state.encoders['Studi_Jurusan'].classes_))
+                ))
+                for key, value in jurusan_mapping.items():
+                    st.write(f"{key} → {value}")
+                st.markdown("</div>", unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown("<div class='card'>", unsafe_allow_html=True)
+                st.markdown("**Mapping AI Tools:**")
+                tools_mapping = dict(zip(
+                    st.session_state.encoders['AI_Tools'].classes_,
+                    range(len(st.session_state.encoders['AI_Tools'].classes_))
+                ))
+                for key, value in tools_mapping.items():
+                    st.write(f"{key} → {value}")
+                st.markdown("</div>", unsafe_allow_html=True)
+            
+            # Show processed data
+            st.subheader("📋 Data Setelah Processing")
+            
+            # Add frequency interpretation
+            kb = KnowledgeBaseSystem()
+            df_display = df_encoded.copy()
+            df_display['Frekuensi'] = df_display['Usage_Intensity_Score'].apply(
+                lambda x: kb.get_frequency_interpretation(x)['frequency']
+            )
+            
+            st.dataframe(df_display[['Nama', 'Studi_Jurusan', 'Semester', 'AI_Tools', 
+                                    'Trust_Level', 'Usage_Intensity_Score', 'Frekuensi', 
+                                    'Usage_Level']].head(), use_container_width=True)
+            
+            # Show target distribution
+            st.subheader("🎯 Distribusi Target (Usage Level)")
+            level_counts = df_encoded['Usage_Level'].value_counts()
+            
+            # Create visualization
+            fig = px.pie(values=level_counts.values, names=level_counts.index,
+                        title="Distribusi Tingkat Penggunaan AI",
+                        color=level_counts.index,
+                        color_discrete_map={
+                            'RENDAH': '#2ECC71',
+                            'SEDANG': '#F39C12',
+                            'TINGGI': '#E74C3C'
+                        })
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Show statistics with frequency interpretation
+            st.subheader("📈 Statistik Klasifikasi")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                rendah_count = level_counts.get('RENDAH', 0)
+                st.metric("Level Rendah", rendah_count)
+                if rendah_count > 0:
+                    st.caption("1-5 kali/minggu")
+            
+            with col2:
+                sedang_count = level_counts.get('SEDANG', 0)
+                st.metric("Level Sedang", sedang_count)
+                if sedang_count > 0:
+                    st.caption("6-20 kali/minggu")
+            
+            with col3:
+                tinggi_count = level_counts.get('TINGGI', 0)
+                st.metric("Level Tinggi", tinggi_count)
+                if tinggi_count > 0:
+                    st.caption(">20 kali/minggu")
+            
+            # Show feature correlation
+            st.subheader("📊 Korelasi Fitur dengan Skor Penggunaan")
+            
+            # Calculate correlation
+            correlation_df = df_encoded[['Semester', 'Trust_Level', 'Usage_Intensity_Score']].corr()
+            
+            fig = px.imshow(correlation_df,
+                           labels=dict(x="Variabel", y="Variabel", color="Korelasi"),
+                           x=['Semester', 'Trust Level', 'Usage Score'],
+                           y=['Semester', 'Trust Level', 'Usage Score'],
+                           title="Matriks Korelasi",
+                           color_continuous_scale='RdBu',
+                           zmin=-1, zmax=1,
+                           text_auto=True)
+            st.plotly_chart(fig, use_container_width=True)
 
-def model_training_section():
+def model_training():
     """Model training section"""
     st.header("🤖 Model Training - Random Forest")
     
@@ -1486,6 +1307,11 @@ def model_training_section():
     - Multiple decision trees untuk meningkatkan akurasi
     - Bagging technique untuk mengurangi overfitting
     - Robust terhadap data noise dan outlier
+    
+    **Target Klasifikasi:** 
+    - RENDAH: Skor 1-3 (1-5 kali/minggu)
+    - SEDANG: Skor 4-7 (6-20 kali/minggu) 
+    - TINGGI: Skor 8-10+ (>20 kali/minggu)
     """)
     
     # Model parameters
@@ -1500,7 +1326,7 @@ def model_training_section():
         min_samples_split = st.slider("Min Samples Split", 2, 10, 5)
         min_samples_leaf = st.slider("Min Samples Leaf", 1, 5, 2)
     
-    if st.button("🎯 Train Model", type="primary", use_container_width=True):
+    if st.button("🎯 Train Model", type="primary"):
         with st.spinner("Melatih model Random Forest..."):
             # Train model
             X = st.session_state.processed_data['X']
@@ -1526,9 +1352,6 @@ def model_training_section():
             # Make predictions
             y_pred = model.predict(X_test)
             
-            # Calculate metrics
-            accuracy = accuracy_score(y_test, y_pred)
-            
             # Save model and results
             st.session_state.model = {
                 'model': model,
@@ -1537,13 +1360,14 @@ def model_training_section():
                 'y_train': y_train,
                 'y_test': y_test,
                 'y_pred': y_pred,
-                'params': model_params,
-                'accuracy': accuracy
+                'params': model_params
             }
             
             st.success("✅ Model berhasil dilatih!")
             
             # Show training results
+            accuracy = accuracy_score(y_test, y_pred)
+            
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("Accuracy", f"{accuracy:.2%}")
@@ -1554,25 +1378,51 @@ def model_training_section():
             
             # Feature importance
             st.subheader("📊 Feature Importance")
-            
-            feature_names = st.session_state.processed_data['features']
+            feature_names = ['Semester', 'Trust Level', 'Jurusan', 'AI Tools']
             importances = model.feature_importances_
             
-            # Create feature importance dataframe
-            importance_df = pd.DataFrame({
-                'Fitur': feature_names,
-                'Importance': importances
-            }).sort_values('Importance', ascending=False)
-            
-            # Plot feature importance
-            fig = px.bar(importance_df, x='Fitur', y='Importance',
+            fig = px.bar(x=feature_names, y=importances,
                         title="Importance Fitur dalam Model",
-                        labels={'Importance': 'Importance', 'Fitur': 'Fitur'},
-                        color='Importance',
+                        labels={'x': 'Fitur', 'y': 'Importance'},
+                        color=importances,
                         color_continuous_scale='Viridis')
             st.plotly_chart(fig, use_container_width=True)
+            
+            # Show detailed feature importance
+            importance_df = pd.DataFrame({
+                'Fitur': feature_names,
+                'Importance': importances,
+                'Interpretasi': [
+                    'Semester studi',
+                    'Tingkat kepercayaan terhadap AI',
+                    'Program studi/jurusan',
+                    'Jenis tools AI yang digunakan'
+                ]
+            }).sort_values('Importance', ascending=False)
+            
+            st.dataframe(importance_df, use_container_width=True)
+            
+            # Show prediction distribution
+            st.subheader("📈 Distribusi Prediksi")
+            
+            # Decode predictions
+            le_target = st.session_state.encoders['Usage_Level']
+            y_pred_decoded = le_target.inverse_transform(y_pred)
+            
+            pred_counts = pd.Series(y_pred_decoded).value_counts()
+            
+            fig = px.bar(x=pred_counts.index, y=pred_counts.values,
+                        title="Distribusi Hasil Prediksi",
+                        labels={'x': 'Klasifikasi', 'y': 'Jumlah'},
+                        color=pred_counts.index,
+                        color_discrete_map={
+                            'RENDAH': '#2ECC71',
+                            'SEDANG': '#F39C12',
+                            'TINGGI': '#E74C3C'
+                        })
+            st.plotly_chart(fig, use_container_width=True)
 
-def model_evaluation_section():
+def model_evaluation():
     """Model evaluation section"""
     st.header("📈 Evaluasi Model")
     
@@ -1588,33 +1438,14 @@ def model_evaluation_section():
     - **Precision:** Proporsi prediksi positif yang benar (per kelas)
     - **Recall:** Proporsi data positif yang terdeteksi (per kelas)
     - **F1-Score:** Rata-rata harmonik precision dan recall (per kelas)
+    - **Weighted Avg:** Rata-rata terbobot berdasarkan support tiap kelas
     """)
     
     # Calculate metrics
     accuracy = accuracy_score(model_data['y_test'], model_data['y_pred'])
-    
-    # Get classification report
-    try:
-        # Get class names
-        if 'Usage_Level' in st.session_state.encoders:
-            le_target = st.session_state.encoders['Usage_Level']
-            target_names = le_target.classes_
-        else:
-            target_names = ['RENDAH', 'SEDANG', 'TINGGI']
-        
-        report = classification_report(model_data['y_test'], model_data['y_pred'], 
-                                      target_names=target_names,
-                                      output_dict=True)
-    except:
-        # Fallback report
-        report = {
-            'accuracy': accuracy,
-            'weighted avg': {
-                'precision': accuracy,
-                'recall': accuracy,
-                'f1-score': accuracy
-            }
-        }
+    report = classification_report(model_data['y_test'], model_data['y_pred'], 
+                                  target_names=['RENDAH', 'SEDANG', 'TINGGI'],
+                                  output_dict=True)
     
     # Display metrics
     st.subheader("📊 Performa Model")
@@ -1623,90 +1454,136 @@ def model_evaluation_section():
     with col1:
         st.metric("Accuracy", f"{accuracy:.2%}")
     with col2:
-        precision = report.get('weighted avg', {}).get('precision', accuracy)
-        st.metric("Precision", f"{precision:.2%}")
+        st.metric("Precision", f"{report['weighted avg']['precision']:.2%}")
     with col3:
-        recall = report.get('weighted avg', {}).get('recall', accuracy)
-        st.metric("Recall", f"{recall:.2%}")
+        st.metric("Recall", f"{report['weighted avg']['recall']:.2%}")
     with col4:
-        f1 = report.get('weighted avg', {}).get('f1-score', accuracy)
-        st.metric("F1-Score", f"{f1:.2%}")
+        st.metric("F1-Score", f"{report['weighted avg']['f1-score']:.2%}")
     
     # Classification report
     st.subheader("📋 Classification Report Detail")
     
     # Create a styled dataframe
-    if isinstance(report, dict) and 'RENDAH' in report:
-        report_df = pd.DataFrame(report).transpose()
-        report_df = report_df.round(2)
+    report_df = pd.DataFrame(report).transpose()
+    report_df = report_df.round(2)
+    
+    # Color code the metrics
+    def color_metrics(val):
+        if isinstance(val, (int, float)):
+            if val >= 0.9:
+                return 'background-color: #D5F4E6'
+            elif val >= 0.7:
+                return 'background-color: #FCF3CF'
+            else:
+                return 'background-color: #FADBD8'
+        return ''
+    
+    styled_report = report_df.style.applymap(color_metrics, subset=pd.IndexSlice[:, ['precision', 'recall', 'f1-score']])
+    st.dataframe(styled_report, use_container_width=True)
+    
+    # Confusion matrix
+    st.subheader("📊 Confusion Matrix")
+    cm = confusion_matrix(model_data['y_test'], model_data['y_pred'])
+    
+    fig = px.imshow(cm,
+                    labels=dict(x="Prediksi", y="Aktual", color="Jumlah"),
+                    x=['RENDAH', 'SEDANG', 'TINGGI'],
+                    y=['RENDAH', 'SEDANG', 'TINGGI'],
+                    title="Confusion Matrix - Perbandingan Prediksi vs Aktual",
+                    text_auto=True,
+                    color_continuous_scale='Blues')
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Detailed confusion matrix analysis
+    st.subheader("🔍 Analisis Confusion Matrix")
+    
+    # Decode predictions
+    le_target = st.session_state.encoders['Usage_Level']
+    y_test_decoded = le_target.inverse_transform(model_data['y_test'])
+    y_pred_decoded = le_target.inverse_transform(model_data['y_pred'])
+    
+    comparison_df = pd.DataFrame({
+        'Aktual': y_test_decoded,
+        'Prediksi': y_pred_decoded
+    })
+    
+    # Calculate accuracy per class
+    class_accuracy = {}
+    for class_name in ['RENDAH', 'SEDANG', 'TINGGI']:
+        mask = comparison_df['Aktual'] == class_name
+        if mask.sum() > 0:
+            class_acc = (comparison_df.loc[mask, 'Aktual'] == comparison_df.loc[mask, 'Prediksi']).mean()
+            class_accuracy[class_name] = class_acc
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Akurasi RENDAH", f"{class_accuracy.get('RENDAH', 0):.2%}")
+    with col2:
+        st.metric("Akurasi SEDANG", f"{class_accuracy.get('SEDANG', 0):.2%}")
+    with col3:
+        st.metric("Akurasi TINGGI", f"{class_accuracy.get('TINGGI', 0):.2%}")
+    
+    # Show misclassifications
+    st.subheader("📝 Contoh Kasus Salah Klasifikasi")
+    
+    misclassified = comparison_df[comparison_df['Aktual'] != comparison_df['Prediksi']]
+    
+    if not misclassified.empty:
+        st.dataframe(misclassified.head(10), use_container_width=True)
         
-        # Color code the metrics
-        def color_metrics(val):
-            if isinstance(val, (int, float)):
-                if val >= 0.9:
-                    return 'background-color: #D5F4E6'
-                elif val >= 0.7:
-                    return 'background-color: #FCF3CF'
-                else:
-                    return 'background-color: #FADBD8'
-            return ''
+        # Analyze common misclassification patterns
+        st.write("**Pola Salah Klasifikasi yang Sering Terjadi:**")
+        misclass_patterns = misclassified.groupby(['Aktual', 'Prediksi']).size().reset_index(name='Jumlah')
+        misclass_patterns = misclass_patterns.sort_values('Jumlah', ascending=False)
         
-        styled_report = report_df.style.applymap(color_metrics, 
-                                               subset=pd.IndexSlice[['RENDAH', 'SEDANG', 'TINGGI', 'weighted avg'], 
-                                                                    ['precision', 'recall', 'f1-score']])
-        st.dataframe(styled_report, use_container_width=True)
+        for _, row in misclass_patterns.iterrows():
+            st.write(f"- {row['Aktual']} → {row['Prediksi']}: {row['Jumlah']} kasus")
+    else:
+        st.success("🎉 Semua prediksi sesuai dengan data aktual!")
 
 def recommendations_section():
-    """Recommendations section - DIPERBAIKI"""
+    """Recommendations section"""
     st.header("🎯 Rekomendasi Berdasarkan Analisis")
     
-    # Initialize knowledge base if not exists
-    if st.session_state.knowledge_base is None:
-        st.session_state.knowledge_base = KnowledgeBaseSystem()
-    
-    # Check if we have clean data
-    if st.session_state.df_clean is None:
-        st.warning("Harap lakukan data cleaning terlebih dahulu!")
+    if st.session_state.df_clean is None or st.session_state.knowledge_base is None:
+        st.warning("Data belum siap untuk analisis rekomendasi!")
         return
     
-    df_clean = st.session_state.df_clean
-    
-    # Button to generate recommendations
-    if st.button("🔄 Generate Rekomendasi", type="primary", use_container_width=True):
+    # Generate recommendations for all students
+    if st.button("🔄 Generate Rekomendasi", type="primary"):
         with st.spinner("Membuat rekomendasi..."):
             kb = st.session_state.knowledge_base
+            df = st.session_state.df_clean
             
-            # Generate recommendations for each student
-            recommendations_list = []
-            classifications_list = []
+            # Classify each student
+            recommendations = []
+            classifications = []
             
-            for idx, student in df_clean.iterrows():
-                score = student['Usage_Intensity_Score'] if 'Usage_Intensity_Score' in student else 5
+            for _, student in df.iterrows():
+                score = student['Usage_Intensity_Score']
                 classification = kb.classify_usage(score)
-                classifications_list.append(classification)
+                classifications.append(classification)
                 
-                # Get recommendation
                 recommendation = kb.get_recommendation(classification, student)
-                recommendations_list.append(recommendation)
+                recommendations.append(recommendation)
             
             # Generate summary report
-            summary = kb.generate_summary_report(classifications_list)
+            summary = kb.generate_summary_report(classifications)
             
-            # Store results
+            # Save results
             st.session_state.results = {
-                'recommendations': recommendations_list,
+                'recommendations': recommendations,
                 'summary': summary,
-                'classifications': classifications_list
+                'classifications': classifications
             }
             
-            st.success(f"✅ Rekomendasi berhasil dibuat untuk {len(recommendations_list)} mahasiswa!")
+            st.success("✅ Rekomendasi berhasil dibuat!")
     
-    # Display results if available
     if st.session_state.results:
         results = st.session_state.results
         summary = results['summary']
         
-        # Display summary
+        # Display summary with detailed statistics
         st.subheader("📊 Ringkasan Analisis")
         
         col1, col2, col3, col4 = st.columns(4)
@@ -1719,125 +1596,148 @@ def recommendations_section():
         with col4:
             st.metric("Tingkat Risiko", summary['risk_level'])
         
-        # Display distribution chart
-        st.subheader("📈 Distribusi Klasifikasi")
-        
-        # Create distribution dataframe
-        dist_data = {
-            'Kategori': ['RENDAH', 'SEDANG', 'TINGGI'],
-            'Jumlah': [
-                summary['counts'].get('RENDAH', 0),
-                summary['counts'].get('SEDANG', 0),
-                summary['counts'].get('TINGGI', 0)
-            ]
-        }
-        
-        dist_df = pd.DataFrame(dist_data)
-        
-        fig = px.bar(dist_df, x='Kategori', y='Jumlah',
-                    title="Distribusi Mahasiswa Berdasarkan Klasifikasi",
-                    color='Kategori',
-                    color_discrete_map={
-                        'RENDAH': '#2ECC71',
-                        'SEDANG': '#F39C12',
-                        'TINGGI': '#E74C3C'
-                    })
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Display detailed recommendations by category
+        # Display recommendations by category
         st.subheader("📋 Detail Rekomendasi per Kategori")
         
-        # Create tabs for each category
-        tab1, tab2, tab3 = st.tabs(["🟢 RENDAH", "🟡 SEDANG", "🔴 TINGGI"])
+        tabs = st.tabs(["🔴 TINGGI", "🟡 SEDANG", "🟢 RENDAH", "❓ TIDAK VALID"])
         
-        # Filter recommendations by category
-        rendah_rec = [r for r in results['recommendations'] if r['classification'] == 'RENDAH']
-        sedang_rec = [r for r in results['recommendations'] if r['classification'] == 'SEDANG']
-        tinggi_rec = [r for r in results['recommendations'] if r['classification'] == 'TINGGI']
-        
-        with tab1:
-            if rendah_rec:
-                st.markdown(f"### 🟢 Level RENDAH ({len(rendah_rec)} mahasiswa)")
-                for rec in rendah_rec[:5]:  # Show first 5
-                    with st.expander(f"{rec['student_name']} - {rec['jurusan']}"):
-                        st.write(f"**Skor:** {rec['usage_score']}")
-                        st.write(f"**Trust Level:** {rec['trust_level']}")
-                        st.write(f"**AI Tool:** {rec['ai_tool']}")
-                        st.write(f"**Frekuensi:** {rec['frequency_interpretation']['frequency']}")
-                        st.write("**Rekomendasi:**")
-                        for detail in rec['details']:
-                            st.write(f"- {detail}")
-            else:
-                st.info("Tidak ada mahasiswa dengan level RENDAH")
-        
-        with tab2:
-            if sedang_rec:
-                st.markdown(f"### 🟡 Level SEDANG ({len(sedang_rec)} mahasiswa)")
-                for rec in sedang_rec[:5]:  # Show first 5
-                    with st.expander(f"{rec['student_name']} - {rec['jurusan']}"):
-                        st.write(f"**Skor:** {rec['usage_score']}")
-                        st.write(f"**Trust Level:** {rec['trust_level']}")
-                        st.write(f"**AI Tool:** {rec['ai_tool']}")
-                        st.write(f"**Frekuensi:** {rec['frequency_interpretation']['frequency']}")
-                        st.write("**Rekomendasi:**")
-                        for detail in rec['details']:
-                            st.write(f"- {detail}")
-            else:
-                st.info("Tidak ada mahasiswa dengan level SEDANG")
-        
-        with tab3:
-            if tinggi_rec:
-                st.markdown(f"### 🔴 Level TINGGI ({len(tinggi_rec)} mahasiswa)")
-                for rec in tinggi_rec[:5]:  # Show first 5
-                    with st.expander(f"{rec['student_name']} - {rec['jurusan']}"):
-                        st.write(f"**Skor:** {rec['usage_score']}")
-                        st.write(f"**Trust Level:** {rec['trust_level']}")
-                        st.write(f"**AI Tool:** {rec['ai_tool']}")
-                        st.write(f"**Frekuensi:** {rec['frequency_interpretation']['frequency']}")
-                        st.write("**Rekomendasi:**")
-                        for detail in rec['details']:
-                            st.write(f"- {detail}")
-            else:
-                st.info("Tidak ada mahasiswa dengan level TINGGI")
+        categories = ['TINGGI', 'SEDANG', 'RENDAH', 'TIDAK_VALID']
+        for tab, category in zip(tabs, categories):
+            with tab:
+                category_students = [r for r in results['recommendations'] if r['classification'] == category]
+                
+                if category_students:
+                    st.markdown(f"### {len(category_students)} Mahasiswa dengan Level {category}")
+                    
+                    for student_rec in category_students:
+                        color_class = {
+                            'TINGGI': 'danger-card',
+                            'SEDANG': 'warning-card',
+                            'RENDAH': 'success-card',
+                            'TIDAK_VALID': 'card'
+                        }[category]
+                        
+                        st.markdown(f"<div class='card {color_class}'>", unsafe_allow_html=True)
+                        st.markdown(f"**{student_rec['icon']} {student_rec['student_name']}**")
+                        st.markdown(f"*{student_rec['jurusan']} - Semester {student_rec['semester']}*")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown(f"**AI Tool:** {student_rec['ai_tool']}")
+                            st.markdown(f"**Trust Level:** {student_rec['trust_level']}/5")
+                        with col2:
+                            st.markdown(f"**Usage Score:** {student_rec['usage_score']}/10")
+                            if 'frequency_interpretation' in student_rec:
+                                st.markdown(f"**Frekuensi:** {student_rec['frequency_interpretation']['frequency']}")
+                        
+                        st.markdown("---")
+                        st.markdown("**Rekomendasi:**")
+                        for rec in student_rec['details']:
+                            st.markdown(f"• {rec}")
+                        
+                        st.markdown("**Tindakan:**")
+                        for action in student_rec['actions']:
+                            st.markdown(f"▶️ {action}")
+                        
+                        st.markdown("</div>", unsafe_allow_html=True)
+                else:
+                    st.info(f"Tidak ada mahasiswa dengan level {category}")
         
         # Export options
         st.subheader("📥 Export Hasil")
         
-        if st.button("💾 Export ke CSV", use_container_width=True):
-            # Create export dataframe
-            export_data = []
-            for rec in results['recommendations']:
-                export_data.append({
-                    'Nama': rec['student_name'],
-                    'Jurusan': rec['jurusan'],
-                    'Semester': rec['semester'],
-                    'AI_Tool': rec['ai_tool'],
-                    'Trust_Level': rec['trust_level'],
-                    'Usage_Score': rec['usage_score'],
-                    'Frekuensi': rec.get('frequency_interpretation', {}).get('frequency', ''),
-                    'Klasifikasi': rec['classification'],
-                    'Label': rec['label'],
-                    'Rekomendasi_1': rec['details'][0] if len(rec['details']) > 0 else '',
-                    'Rekomendasi_2': rec['details'][1] if len(rec['details']) > 1 else '',
-                    'Tindakan_1': rec['actions'][0] if len(rec['actions']) > 0 else '',
-                    'Tindakan_2': rec['actions'][1] if len(rec['actions']) > 1 else ''
-                })
-            
-            export_df = pd.DataFrame(export_data)
-            
-            # Convert to CSV
-            csv = export_df.to_csv(index=False, sep=';')
-            
-            # Create download button
-            b64 = base64.b64encode(csv.encode()).decode()
-            href = f'<a href="data:file/csv;base64,{b64}" download="rekomendasi_ai_mahasiswa.csv" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; border-radius: 5px;">📥 Download CSV</a>'
-            st.markdown(href, unsafe_allow_html=True)
-    
-    else:
-        st.info("Klik tombol 'Generate Rekomendasi' untuk membuat analisis rekomendasi.")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("💾 Export ke CSV"):
+                # Convert to DataFrame for export
+                export_data = []
+                for rec in results['recommendations']:
+                    export_data.append({
+                        'Nama': rec['student_name'],
+                        'Jurusan': rec['jurusan'],
+                        'Semester': rec['semester'],
+                        'AI_Tool': rec['ai_tool'],
+                        'Trust_Level': rec['trust_level'],
+                        'Usage_Score': rec['usage_score'],
+                        'Frekuensi': rec.get('frequency_interpretation', {}).get('frequency', ''),
+                        'Klasifikasi': rec['classification'],
+                        'Label': rec['label'],
+                        'Monitoring_Level': rec['monitoring_level']
+                    })
+                
+                export_df = pd.DataFrame(export_data)
+                csv = export_df.to_csv(index=False)
+                
+                st.download_button(
+                    label="Download CSV",
+                    data=csv,
+                    file_name="rekomendasi_penggunaan_ai.csv",
+                    mime="text/csv"
+                )
+        
+        with col2:
+            # Export summary report
+            if st.button("📊 Export Ringkasan"):
+                summary_data = {
+                    'Total_Mahasiswa': [summary['total_students']],
+                    'Data_Valid': [summary['valid_students']],
+                    'Data_Tidak_Valid': [summary['invalid_students']],
+                    'Level_Rendah': [summary['counts'].get('RENDAH', 0)],
+                    'Level_Sedang': [summary['counts'].get('SEDANG', 0)],
+                    'Level_Tinggi': [summary['counts'].get('TINGGI', 0)],
+                    'Level_Dominan': [summary['dominant_class']],
+                    'Tingkat_Risiko': [summary['risk_level']],
+                    'Tanggal_Analisis': [datetime.now().strftime("%Y-%m-%d %H:%M:%S")]
+                }
+                
+                summary_df = pd.DataFrame(summary_data)
+                csv = summary_df.to_csv(index=False)
+                
+                st.download_button(
+                    label="Download Ringkasan",
+                    data=csv,
+                    file_name="ringkasan_analisis_ai.csv",
+                    mime="text/csv"
+                )
+        
+        with col3:
+            # Export detailed report
+            if st.button("📋 Export Laporan Detail"):
+                # Create detailed report
+                report_lines = []
+                report_lines.append("LAPORAN ANALISIS PENGGUNAAN AI MAHASISWA")
+                report_lines.append("=" * 50)
+                report_lines.append(f"Tanggal: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                report_lines.append(f"Total Mahasiswa: {summary['total_students']}")
+                report_lines.append(f"Data Valid: {summary['valid_students']}")
+                report_lines.append(f"Level Dominan: {summary['dominant_class']}")
+                report_lines.append(f"Tingkat Risiko: {summary['risk_level']}")
+                report_lines.append("")
+                report_lines.append("DISTRIBUSI KLASIFIKASI:")
+                for level in ['RENDAH', 'SEDANG', 'TINGGI']:
+                    count = summary['counts'].get(level, 0)
+                    percentage = summary['percentages'].get(level, 0)
+                    report_lines.append(f"- {level}: {count} mahasiswa ({percentage:.1f}%)")
+                report_lines.append("")
+                report_lines.append("REKOMENDASI PER KATEGORI:")
+                
+                for level in ['TINGGI', 'SEDANG', 'RENDAH']:
+                    level_students = [r for r in results['recommendations'] if r['classification'] == level]
+                    if level_students:
+                        report_lines.append(f"\n{level} ({len(level_students)} mahasiswa):")
+                        for student in level_students[:5]:  # Limit to 5 per category
+                            report_lines.append(f"  • {student['student_name']} - Skor: {student['usage_score']}")
+                
+                report_text = "\n".join(report_lines)
+                
+                # Convert to bytes for download
+                b64 = base64.b64encode(report_text.encode()).decode()
+                href = f'<a href="data:file/txt;base64,{b64}" download="laporan_analisis_ai.txt" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; border-radius: 5px;">📄 Download Laporan Detail</a>'
+                st.markdown(href, unsafe_allow_html=True)
 
-def analytics_dashboard_section():
-    """Analytics dashboard section"""
+def analytics_dashboard():
+    """Analytics dashboard"""
     st.header("📊 Dashboard Analitik")
     
     if st.session_state.df_clean is None:
@@ -1852,59 +1752,201 @@ def analytics_dashboard_section():
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        if 'Usage_Intensity_Score' in df.columns:
-            avg_usage = df['Usage_Intensity_Score'].mean()
-            st.metric("Rata-rata Penggunaan", f"{avg_usage:.2f}")
-        else:
-            st.metric("Rata-rata Penggunaan", "N/A")
+        avg_usage = df['Usage_Intensity_Score'].mean()
+        st.metric("Rata-rata Penggunaan", f"{avg_usage:.2f}")
     
     with col2:
-        if 'Trust_Level' in df.columns:
-            avg_trust = df['Trust_Level'].mean()
-            st.metric("Rata-rata Trust Level", f"{avg_trust:.2f}")
-        else:
-            st.metric("Rata-rata Trust Level", "N/A")
+        avg_trust = df['Trust_Level'].mean()
+        st.metric("Rata-rata Trust Level", f"{avg_trust:.2f}")
     
     with col3:
-        if 'Usage_Intensity_Score' in df.columns:
-            high_users = (df['Usage_Intensity_Score'] >= 8).sum()
-            st.metric("Pengguna Intensif", high_users)
-        else:
-            st.metric("Pengguna Intensif", "N/A")
+        high_users = (df['Usage_Intensity_Score'] >= 8).sum()
+        st.metric("Pengguna Intensif", high_users)
     
     with col4:
-        if 'Usage_Intensity_Score' in df.columns:
-            low_users = (df['Usage_Intensity_Score'] <= 3).sum()
-            st.metric("Pengguna Rendah", low_users)
-        else:
-            st.metric("Pengguna Rendah", "N/A")
+        low_users = (df['Usage_Intensity_Score'] <= 3).sum()
+        st.metric("Pengguna Rendah", low_users)
     
-    # Show data table
-    st.subheader("📋 Data Analisis")
+    # Interactive visualizations
+    st.subheader("📊 Visualisasi Interaktif")
     
-    # Add classification if knowledge base exists
-    if st.session_state.knowledge_base:
-        kb = st.session_state.knowledge_base
-        df_display = df.copy()
+    # Create tabs for different visualizations
+    tab1, tab2, tab3, tab4 = st.tabs(["Distribusi Skor", "Analisis Frekuensi", "Tools AI", "Korelasi"])
+    
+    with tab1:
+        # Distribution visualization with interpretation
+        fig = px.histogram(df, x='Usage_Intensity_Score',
+                          title='Distribusi Skor Penggunaan AI',
+                          nbins=10,
+                          color_discrete_sequence=['#2E86C1'],
+                          labels={'Usage_Intensity_Score': 'Skor Penggunaan (1-10)'})
         
-        if 'Usage_Intensity_Score' in df_display.columns:
-            df_display['Klasifikasi'] = df_display['Usage_Intensity_Score'].apply(kb.classify_usage)
-            df_display['Frekuensi'] = df_display['Usage_Intensity_Score'].apply(
-                lambda x: kb.get_frequency_interpretation(x)['frequency']
-            )
+        # Add vertical lines for classification boundaries
+        fig.add_vline(x=3.5, line_dash="dash", line_color="green", 
+                     annotation_text="RENDAH-SEDANG", annotation_position="top")
+        fig.add_vline(x=7.5, line_dash="dash", line_color="red",
+                     annotation_text="SEDANG-TINGGI", annotation_position="top")
         
-        # Show selected columns
-        display_cols = []
-        for col in ['Nama', 'Studi_Jurusan', 'Semester', 'AI_Tools', 'Trust_Level', 'Usage_Intensity_Score', 'Klasifikasi', 'Frekuensi']:
-            if col in df_display.columns:
-                display_cols.append(col)
+        st.plotly_chart(fig, use_container_width=True)
         
-        if display_cols:
-            st.dataframe(df_display[display_cols], use_container_width=True, height=400)
+        # Show interpretation of distribution
+        st.markdown("**Interpretasi Distribusi:**")
+        kb = KnowledgeBaseSystem()
+        for score_range in [(1, 3), (4, 7), (8, 10)]:
+            count = ((df['Usage_Intensity_Score'] >= score_range[0]) & 
+                    (df['Usage_Intensity_Score'] <= score_range[1])).sum()
+            percentage = (count / len(df)) * 100
+            classification = kb.classify_usage(score_range[0])
+            freq = kb.get_frequency_interpretation(score_range[0])['frequency']
+            
+            st.markdown(f"- **{classification}** (Skor {score_range[0]}-{score_range[1]}): {count} mahasiswa ({percentage:.1f}%) - {freq}")
+    
+    with tab2:
+        # Frequency analysis
+        kb = KnowledgeBaseSystem()
+        df_freq = df.copy()
+        df_freq['Frekuensi'] = df_freq['Usage_Intensity_Score'].apply(
+            lambda x: kb.get_frequency_interpretation(x)['frequency']
+        )
+        
+        freq_counts = df_freq['Frekuensi'].value_counts().reset_index()
+        freq_counts.columns = ['Frekuensi', 'Jumlah']
+        
+        fig = px.bar(freq_counts, x='Frekuensi', y='Jumlah',
+                    title='Distribusi Frekuensi Penggunaan AI',
+                    color='Jumlah',
+                    color_continuous_scale='Viridis')
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Show detailed frequency statistics
+        st.markdown("**Statistik Frekuensi:**")
+        for freq in freq_counts['Frekuensi'].unique():
+            count = freq_counts[freq_counts['Frekuensi'] == freq]['Jumlah'].values[0]
+            percentage = (count / len(df)) * 100
+            st.markdown(f"- **{freq}:** {count} mahasiswa ({percentage:.1f}%)")
+    
+    with tab3:
+        # AI Tools usage analysis
+        tools_usage = df.groupby('AI_Tools').agg({
+            'Usage_Intensity_Score': ['mean', 'count'],
+            'Trust_Level': 'mean'
+        }).reset_index()
+        
+        tools_usage.columns = ['AI_Tools', 'Avg_Usage', 'Count', 'Avg_Trust']
+        
+        # Create bubble chart
+        fig = px.scatter(tools_usage, x='Avg_Usage', y='Avg_Trust',
+                        size='Count', color='AI_Tools',
+                        title='Tools AI vs Penggunaan & Kepercayaan',
+                        hover_name='AI_Tools',
+                        labels={'Avg_Usage': 'Rata-rata Skor Penggunaan',
+                               'Avg_Trust': 'Rata-rata Trust Level'})
+        
+        # Add reference lines
+        fig.add_hline(y=3, line_dash="dash", line_color="orange")
+        fig.add_vline(x=7, line_dash="dash", line_color="red")
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Show tools statistics
+        st.markdown("**Statistik Tools AI:**")
+        for _, row in tools_usage.iterrows():
+            st.markdown(f"- **{row['AI_Tools']}:** {row['Count']} pengguna, Skor rata-rata: {row['Avg_Usage']:.1f}, Trust: {row['Avg_Trust']:.1f}")
+    
+    with tab4:
+        # Correlation matrix with additional variables
+        numeric_df = df.copy()
+        
+        # Add classification for color coding
+        kb = KnowledgeBaseSystem()
+        numeric_df['Classification'] = numeric_df['Usage_Intensity_Score'].apply(kb.classify_usage)
+        
+        # Create scatter matrix
+        fig = px.scatter_matrix(numeric_df,
+                               dimensions=['Semester', 'Trust_Level', 'Usage_Intensity_Score'],
+                               color='Classification',
+                               title='Matriks Korelasi Antar Variabel',
+                               color_discrete_map={
+                                   'RENDAH': '#2ECC71',
+                                   'SEDANG': '#F39C12',
+                                   'TINGGI': '#E74C3C'
+                               })
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Calculate and display correlation coefficients
+        correlation = numeric_df[['Semester', 'Trust_Level', 'Usage_Intensity_Score']].corr()
+        
+        st.markdown("**Koefisien Korelasi:**")
+        st.dataframe(correlation.style.background_gradient(cmap='RdBu', vmin=-1, vmax=1), 
+                    use_container_width=True)
+    
+    # Detailed analysis
+    if st.session_state.results:
+        st.subheader("🎯 Analisis Rekomendasi")
+        
+        results = st.session_state.results
+        summary = results['summary']
+        
+        # Pie chart of classifications
+        fig = px.pie(values=[summary['counts'].get(k, 0) for k in ['RENDAH', 'SEDANG', 'TINGGI']],
+                    names=['RENDAH', 'SEDANG', 'TINGGI'],
+                    title='Distribusi Klasifikasi Penggunaan AI',
+                    color=['RENDAH', 'SEDANG', 'TINGGI'],
+                    color_discrete_map={
+                        'RENDAH': '#2ECC71',
+                        'SEDANG': '#F39C12',
+                        'TINGGI': '#E74C3C'
+                    })
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Risk assessment
+        st.subheader("⚠️ Assessment Risiko")
+        
+        risk_level = summary['risk_level']
+        risk_color = {
+            'RENDAH': '#2ECC71',
+            'SEDANG': '#F39C12',
+            'TINGGI': '#E74C3C'
+        }.get(risk_level, '#95A5A6')
+        
+        risk_icon = {
+            'RENDAH': '✅',
+            'SEDANG': '⚠️',
+            'TINGGI': '🚨'
+        }.get(risk_level, '❓')
+        
+        st.markdown(f"""
+        <div style="background-color: {risk_color}; color: white; padding: 20px; border-radius: 10px; text-align: center;">
+            <h2>{risk_icon} TINGKAT RISIKO: {risk_level}</h2>
+            <p>Berdasarkan analisis {summary['valid_students']} mahasiswa</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Recommendations based on risk level
+        st.markdown("**Rekomendasi Institusional:**")
+        
+        if risk_level == 'TINGGI':
+            st.markdown("""
+            - **Segera lakukan intervensi institusional**
+            - **Buat kebijakan penggunaan AI di kampus**
+            - **Lakukan workshop etika penggunaan AI**
+            - **Monitor penggunaan AI di laboratorium komputer**
+            - **Sediakan layanan konseling teknologi**
+            """)
+        elif risk_level == 'SEDANG':
+            st.markdown("""
+            - **Tingkatkan awareness penggunaan AI yang sehat**
+            - **Integrasikan etika AI dalam kurikulum**
+            - **Buat panduan penggunaan AI untuk tugas akademik**
+            - **Lakukan survey berkala tentang penggunaan AI**
+            """)
         else:
-            st.dataframe(df_display, use_container_width=True, height=400)
-    else:
-        st.dataframe(df, use_container_width=True, height=400)
+            st.markdown("""
+            - **Pertahankan kondisi saat ini**
+            - **Lakukan monitoring rutin**
+            - **Siapkan mekanisme responsif untuk perubahan trend**
+            - **Dokumentasikan best practices**
+            """)
 
 def mahasiswa_dashboard():
     """Dashboard untuk Mahasiswa"""
@@ -1924,11 +1966,8 @@ def mahasiswa_dashboard():
         # Check if analysis is available
         if st.session_state.df_clean is not None and st.session_state.knowledge_base is not None:
             # Find student data
-            df_clean = st.session_state.df_clean
-            
-            # Case-insensitive search
-            student_data = df_clean[
-                df_clean['Nama'].str.contains(student_name, case=False, na=False)
+            student_data = st.session_state.df_clean[
+                st.session_state.df_clean['Nama'].str.contains(student_name, case=False, na=False)
             ]
             
             if not student_data.empty:
@@ -1936,7 +1975,7 @@ def mahasiswa_dashboard():
                 
                 # Classify student
                 kb = st.session_state.knowledge_base
-                score = student['Usage_Intensity_Score'] if 'Usage_Intensity_Score' in student else 5
+                score = student['Usage_Intensity_Score']
                 classification = kb.classify_usage(score)
                 recommendation = kb.get_recommendation(classification, student)
                 
@@ -1947,15 +1986,11 @@ def mahasiswa_dashboard():
                     st.markdown("<div class='card'>", unsafe_allow_html=True)
                     st.markdown("### 📋 Profil Akademik")
                     st.markdown(f"**Nama:** {student['Nama']}")
-                    if 'Studi_Jurusan' in student:
-                        st.markdown(f"**Jurusan:** {student['Studi_Jurusan']}")
-                    if 'Semester' in student:
-                        st.markdown(f"**Semester:** {student['Semester']}")
-                    if 'AI_Tools' in student:
-                        st.markdown(f"**Tools AI:** {student['AI_Tools']}")
-                    if 'Trust_Level' in student:
-                        st.markdown(f"**Trust Level:** {student['Trust_Level']}/5")
-                    st.markdown(f"**Usage Score:** {score}/10")
+                    st.markdown(f"**Jurusan:** {student['Studi_Jurusan']}")
+                    st.markdown(f"**Semester:** {student['Semester']}")
+                    st.markdown(f"**Tools AI:** {student['AI_Tools']}")
+                    st.markdown(f"**Trust Level:** {student['Trust_Level']}/5")
+                    st.markdown(f"**Usage Score:** {student['Usage_Intensity_Score']}/10")
                     if 'frequency_interpretation' in recommendation:
                         st.markdown(f"**Frekuensi:** {recommendation['frequency_interpretation']['frequency']}")
                     st.markdown("</div>", unsafe_allow_html=True)
@@ -1973,8 +2008,7 @@ def mahasiswa_dashboard():
                     st.markdown(f"### 🎯 Hasil Analisis")
                     st.markdown(f"**{recommendation['icon']} Klasifikasi:** {classification}")
                     st.markdown(f"**🏷️ Label:** {recommendation['label']}")
-                    if 'monitoring_level' in recommendation:
-                        st.markdown(f"**📊 Level Monitoring:** {recommendation['monitoring_level']}")
+                    st.markdown(f"**📊 Level Monitoring:** {recommendation['monitoring_level']}")
                     
                     # Show score interpretation
                     if 'frequency_interpretation' in recommendation:
@@ -1989,118 +2023,163 @@ def mahasiswa_dashboard():
                 st.markdown("<div class='card'>", unsafe_allow_html=True)
                 st.markdown("### 📝 Rekomendasi untuk Anda")
                 
-                if 'details' in recommendation:
-                    st.markdown("**Detail Rekomendasi:**")
-                    for rec in recommendation['details']:
-                        st.markdown(f"• {rec}")
+                st.markdown("**Detail Rekomendasi:**")
+                for rec in recommendation['details']:
+                    st.markdown(f"• {rec}")
                 
-                if 'actions' in recommendation:
-                    st.markdown("**Tindakan yang Disarankan:**")
-                    for action in recommendation['actions']:
-                        st.markdown(f"▶️ {action}")
+                st.markdown("**Tindakan yang Disarankan:**")
+                for action in recommendation['actions']:
+                    st.markdown(f"▶️ {action}")
+                
+                # Additional tips based on classification
+                st.markdown("**💡 Tips Penggunaan AI yang Sehat:**")
+                
+                if classification == 'TINGGI':
+                    tips = [
+                        "Evaluasi ketergantungan Anda terhadap AI",
+                        "Coba selesaikan tugas tanpa bantuan AI minimal 1x/minggu",
+                        "Diskusikan dengan dosen tentang penggunaan AI yang tepat",
+                        "Gunakan AI hanya untuk brainstorming, bukan untuk mengerjakan seluruh tugas",
+                        "Catat penggunaan AI Anda untuk evaluasi mandiri"
+                    ]
+                elif classification == 'SEDANG':
+                    tips = [
+                        "Pertahankan keseimbangan antara AI dan belajar mandiri",
+                        "Gunakan AI sebagai alat verifikasi, bukan sumber utama",
+                        "Selalu cross-check informasi dari AI dengan sumber terpercaya",
+                        "Tetap kembangkan kemampuan analisis dan pemecahan masalah Anda",
+                        "Ikuti perkembangan etika penggunaan AI dalam akademik"
+                    ]
+                else:
+                    tips = [
+                        "Teruskan pola penggunaan AI yang sehat ini",
+                        "Eksplorasi fitur AI yang dapat meningkatkan produktivitas",
+                        "Bagikan tips penggunaan AI yang bijak dengan teman",
+                        "Tetap waspada terhadap perkembangan teknologi AI",
+                        "Pertahankan kemampuan belajar mandiri Anda"
+                    ]
+                
+                for tip in tips:
+                    st.markdown(f"✨ {tip}")
                 
                 st.markdown("</div>", unsafe_allow_html=True)
                 
+                # Visual representation
+                st.markdown("### 📊 Visualisasi Penggunaan")
+                
+                # Create gauge chart for usage score
+                fig = go.Figure(go.Indicator(
+                    mode="gauge+number",
+                    value=float(score),
+                    domain={'x': [0, 1], 'y': [0, 1]},
+                    title={'text': f"Skor Penggunaan AI: {classification}"},
+                    gauge={
+                        'axis': {'range': [1, 10], 'tickwidth': 1},
+                        'bar': {'color': recommendation['color']},
+                        'steps': [
+                            {'range': [1, 3], 'color': '#2ECC71'},
+                            {'range': [3, 7], 'color': '#F39C12'},
+                            {'range': [7, 10], 'color': '#E74C3C'}
+                        ],
+                        'threshold': {
+                            'line': {'color': "black", 'width': 4},
+                            'thickness': 0.75,
+                            'value': float(score)
+                        }
+                    }
+                ))
+                
+                fig.update_layout(height=300)
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Comparison with peers
+                st.markdown("### 📈 Perbandingan dengan Rekan")
+                
+                df_clean = st.session_state.df_clean
+                
+                # Calculate statistics
+                same_jurusan = df_clean[df_clean['Studi_Jurusan'] == student['Studi_Jurusan']]
+                same_semester = df_clean[df_clean['Semester'] == student['Semester']]
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    avg_all = df_clean['Usage_Intensity_Score'].mean()
+                    st.metric("Rata-rata Semua", f"{avg_all:.1f}")
+                with col2:
+                    avg_jurusan = same_jurusan['Usage_Intensity_Score'].mean()
+                    st.metric(f"Rata-rata {student['Studi_Jurusan']}", f"{avg_jurusan:.1f}")
+                with col3:
+                    avg_semester = same_semester['Usage_Intensity_Score'].mean()
+                    st.metric(f"Rata-rata Semester {student['Semester']}", f"{avg_semester:.1f}")
+                
+                # Download personal report
+                st.markdown("### 📥 Download Laporan Pribadi")
+                
+                # Create personal report
+                personal_report = f"""
+                LAPORAN ANALISIS PENGGUNAAN AI - {student['Nama']}
+                Tanggal: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                
+                PROFIL MAHASISWA:
+                - Nama: {student['Nama']}
+                - Jurusan: {student['Studi_Jurusan']}
+                - Semester: {student['Semester']}
+                - Tools AI yang Digunakan: {student['AI_Tools']}
+                - Tingkat Kepercayaan AI: {student['Trust_Level']}/5
+                - Skor Penggunaan AI: {student['Usage_Intensity_Score']}/10
+                
+                INTERPRETASI SKOR:
+                - Klasifikasi: {classification}
+                - Frekuensi Penggunaan: {recommendation.get('frequency_interpretation', {}).get('frequency', 'N/A')}
+                - Deskripsi: {recommendation.get('frequency_interpretation', {}).get('description', 'N/A')}
+                
+                HASIL ANALISIS:
+                - Label: {recommendation['label']}
+                - Level Monitoring: {recommendation['monitoring_level']}
+                
+                REKOMENDASI:
+                {chr(10).join(['- ' + rec for rec in recommendation['details']])}
+                
+                TINDAKAN YANG DISARANKAN:
+                {chr(10).join(['- ' + action for action in recommendation['actions']])}
+                
+                TIPS PENGGUNAAN AI YANG SEHAT:
+                {chr(10).join(['- ' + tip for tip in tips])}
+                
+                PERBANDINGAN DENGAN REKAN:
+                - Rata-rata semua mahasiswa: {avg_all:.1f}
+                - Rata-rata jurusan {student['Studi_Jurusan']}: {avg_jurusan:.1f}
+                - Rata-rata semester {student['Semester']}: {avg_semester:.1f}
+                
+                CATATAN:
+                Laporan ini berdasarkan data self-report. Untuk konsultasi lebih lanjut,
+                silakan hubungi dosen pembimbing atau unit konseling kampus.
+                """
+                
+                # Convert to bytes for download
+                b64 = base64.b64encode(personal_report.encode()).decode()
+                href = f'<a href="data:file/txt;base64,{b64}" download="laporan_ai_{student["Nama"].replace(" ", "_")}.txt" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; border-radius: 5px;">📄 Download Laporan Pribadi</a>'
+                st.markdown(href, unsafe_allow_html=True)
+                
             else:
-                st.warning(f"Data tidak ditemukan untuk mahasiswa: '{student_name}'.")
+                st.warning(f"Data tidak ditemukan untuk nama '{student_name}'.")
                 st.info("""
                 **Kemungkinan penyebab:**
-                1. Nama tidak terdaftar dalam dataset
+                1. Nama tidak terdaftar dalam sistem
                 2. Data Anda belum diproses oleh administrator
-                3. Terdapat perbedaan penulisan nama
+                3. Terdapat kesalahan penulisan nama
                 
-                **Mahasiswa yang tersedia dalam dataset:**
+                Silakan hubungi administrator atau pastikan nama Anda sesuai dengan data akademik.
                 """)
-                
-                # Show available students
-                if len(df_clean) > 0 and 'Nama' in df_clean.columns:
-                    st.dataframe(df_clean[['Nama', 'Studi_Jurusan']].head(10) if 'Studi_Jurusan' in df_clean.columns else df_clean[['Nama']].head(10), 
-                                use_container_width=True)
         else:
             st.info("🔄 Analisis sedang dipersiapkan oleh administrator. Silakan coba lagi nanti.")
     
     # Logout button
     st.sidebar.markdown("---")
-    if st.sidebar.button("🚪 Logout", use_container_width=True):
+    if st.sidebar.button("Logout"):
         st.session_state.authenticated = False
         st.session_state.user_role = None
         st.rerun()
-
-def guru_dashboard():
-    """Dashboard untuk Guru/Dosen"""
-    st.markdown("<h1 class='main-header'>🧑‍🏫 Dashboard Guru/Dosen</h1>", unsafe_allow_html=True)
-    
-    # Initialize knowledge base
-    if st.session_state.knowledge_base is None:
-        st.session_state.knowledge_base = KnowledgeBaseSystem()
-    
-    # Sidebar menu
-    with st.sidebar:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 📊 Menu Analisis")
-        menu = st.radio(
-            "Pilih Menu:",
-            ["📁 Upload Dataset", "📋 Interpretasi Skor", "🧹 Data Cleaning", 
-             "🔧 Data Processing", "🤖 Model Training", "📈 Evaluasi Model", 
-             "🎯 Rekomendasi", "📊 Dashboard Analitik"]
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-        
-        # Data source info
-        if st.session_state.data_source:
-            st.markdown("<div class='card'>", unsafe_allow_html=True)
-            st.markdown("### 📂 Sumber Data")
-            if st.session_state.data_source == "uploaded":
-                if st.session_state.uploaded_file:
-                    st.success(f"✅ {st.session_state.uploaded_file}")
-                else:
-                    st.success("✅ Dataset dari file upload")
-            else:
-                st.info("📊 Dataset default")
-            st.markdown("</div>", unsafe_allow_html=True)
-        
-        # Data status
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### 📈 Status Data")
-        
-        if st.session_state.df is not None:
-            st.success("✅ Data tersedia")
-            if st.session_state.df_clean is not None:
-                st.success("✅ Data sudah dibersihkan")
-            else:
-                st.warning("⚠️ Data belum dibersihkan")
-            
-            if st.session_state.model is not None:
-                st.success("✅ Model sudah dilatih")
-            else:
-                st.info("ℹ️ Model belum dilatih")
-        else:
-            st.error("❌ Data belum dimuat")
-        st.markdown("</div>", unsafe_allow_html=True)
-        
-        # Logout button
-        if st.button("🚪 Logout", use_container_width=True):
-            st.session_state.authenticated = False
-            st.session_state.user_role = None
-            st.rerun()
-    
-    # Main content based on menu
-    if menu == "📁 Upload Dataset":
-        upload_dataset_section()
-    elif menu == "📋 Interpretasi Skor":
-        score_interpretation_section()
-    elif menu == "🧹 Data Cleaning":
-        data_cleaning_section()
-    elif menu == "🔧 Data Processing":
-        data_processing_section()
-    elif menu == "🤖 Model Training":
-        model_training_section()
-    elif menu == "📈 Evaluasi Model":
-        model_evaluation_section()
-    elif menu == "🎯 Rekomendasi":
-        recommendations_section()
-    elif menu == "📊 Dashboard Analitik":
-        analytics_dashboard_section()
 
 def main():
     """Main application"""
