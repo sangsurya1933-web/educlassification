@@ -812,7 +812,7 @@ def login_page():
         
         # Info tambahan
         st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.markdown("### ℹ️ Informasi Sistem")
+        st.markdown("### Informasi Sistem")
         st.markdown("""
         **Sistem ini bertujuan untuk:**
         - Menganalisis tingkat penggunaan AI di kalangan mahasiswa
