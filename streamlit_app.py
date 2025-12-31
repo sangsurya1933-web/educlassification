@@ -772,7 +772,7 @@ def show_score_interpretation_table():
 
 def login_page():
     """Halaman login"""
-    st.markdown("<h1 class='main-header'>🔐 Sistem Analisis Penggunaan AI Mahasiswa</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 class='main-header'>Sistem Analisis Penggunaan AI Mahasiswa</h1>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
     
@@ -780,7 +780,7 @@ def login_page():
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         role = st.selectbox("Pilih Peran", ["Guru/Dosen", "Mahasiswa"])
         
-        if role == "Guru/Dosen":
+        if role == "Guru":
             password = st.text_input("Password", type="password")
             login_button = st.button("Login sebagai Guru")
             
