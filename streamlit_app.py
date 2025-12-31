@@ -19,11 +19,6 @@ import base64
 from datetime import datetime
 import csv
 
-# Set page configuration
-st.set_page_config(
-    
-    layout="wide"
-)
 
 # CSS styling
 st.markdown("""
@@ -246,7 +241,7 @@ class KnowledgeBaseSystem:
                 'classification': 'TIDAK_VALID',
                 'label': 'DATA TIDAK VALID',
                 'color': '#95A5A6',
-                'icon': '❓',
+                'icon': '',
                 'student_name': student_data.get('Nama', ''),
                 'jurusan': student_data.get('Studi_Jurusan', ''),
                 'semester': student_data.get('Semester', ''),
@@ -839,7 +834,7 @@ def login_page():
 
 def upload_dataset_section():
     """Section untuk upload dataset"""
-    st.header("📁 Upload Dataset CSV")
+    st.header(" Upload Dataset CSV")
     
     st.markdown("""
     <div class="upload-section">
@@ -871,7 +866,7 @@ def upload_dataset_section():
     
     with col2:
         st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
-        use_default = st.button("📊 Gunakan Dataset Default", use_container_width=True)
+        use_default = st.button(" Gunakan Dataset Default", use_container_width=True)
     
     # Handle file upload
     if uploaded_file is not None:
@@ -995,7 +990,7 @@ def upload_dataset_section():
                 
                 # Show dataset info
                 st.markdown("<div class='file-info'>", unsafe_allow_html=True)
-                st.markdown(f"**📊 Info Dataset:**")
+                st.markdown(f"**Info Dataset:**")
                 st.markdown(f"- **Sumber:** Dataset Default")
                 st.markdown(f"- **Jumlah data:** {len(df)} baris")
                 st.markdown(f"- **Jumlah kolom:** {len(df.columns)}")
@@ -1015,7 +1010,7 @@ def upload_dataset_section():
                     
                     scores = df['Usage_Intensity_Score'].apply(get_score_val).dropna()
                     if len(scores) > 0:
-                        st.markdown("**📈 Statistik Skor:**")
+                        st.markdown("**Statistik Skor:**")
                         st.markdown(f"- Rata-rata: {scores.mean():.2f}")
                         st.markdown(f"- Minimum: {scores.min():.0f}")
                         st.markdown(f"- Maximum: {scores.max():.0f}")
@@ -1030,7 +1025,7 @@ def upload_dataset_section():
     
     # Show current dataset if exists
     elif st.session_state.df is not None:
-        st.subheader("📋 Dataset Saat Ini")
+        st.subheader("Dataset Saat Ini")
         
         # Show dataset info
         df = st.session_state.df
@@ -1070,7 +1065,7 @@ def upload_dataset_section():
         st.dataframe(df.head(10), use_container_width=True)
         
         # Option to clear dataset
-        if st.button("🗑️ Hapus Dataset Saat Ini", use_container_width=True):
+        if st.button("Hapus Dataset Saat Ini", use_container_width=True):
             st.session_state.df = None
             st.session_state.df_clean = None
             st.session_state.model = None
@@ -1086,14 +1081,14 @@ def upload_dataset_section():
 
 def score_interpretation_section():
     """Section untuk interpretasi skor"""
-    st.header("📋 Interpretasi Usage_Intensity_Score")
+    st.header(" Interpretasi Usage_Intensity_Score")
     
     # Show detailed interpretation table
     show_score_interpretation_table()
     
     # Additional information
     st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("### 📝 Keterangan")
+    st.markdown("### Keterangan")
     st.markdown("""
     **Usage_Intensity_Score** adalah skor self-report (laporan mandiri) yang diberikan mahasiswa 
     berdasarkan frekuensi penggunaan AI dalam aktivitas akademik mereka.
@@ -1117,7 +1112,7 @@ def score_interpretation_section():
     st.markdown("</div>", unsafe_allow_html=True)
     
     # Interactive score interpretation
-    st.subheader("🔍 Cek Interpretasi Skor")
+    st.subheader("Cek Interpretasi Skor")
     
     col1, col2 = st.columns(2)
     
@@ -1132,7 +1127,7 @@ def score_interpretation_section():
     
     with col2:
         st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
-        check_button = st.button("📊 Interpretasi Skor", use_container_width=True)
+        check_button = st.button("Interpretasi Skor", use_container_width=True)
     
     if check_button:
         kb = KnowledgeBaseSystem()
@@ -1147,13 +1142,13 @@ def score_interpretation_section():
         }
         
         icons = {
-            'RENDAH': '✅',
-            'SEDANG': '⚠️',
-            'TINGGI': '🚨'
+            'RENDAH': '',
+            'SEDANG': '',
+            'TINGGI': ''
         }
         
         color = colors.get(classification, '#95A5A6')
-        icon = icons.get(classification, '❓')
+        icon = icons.get(classification, '')
         
         # Display interpretation
         st.markdown(f"""
@@ -1166,7 +1161,7 @@ def score_interpretation_section():
 
 def data_cleaning_section():
     """Data cleaning section"""
-    st.header("🧹 Data Cleaning")
+    st.header("Data Cleaning")
     
     if st.session_state.df is None:
         st.warning("Harap upload dataset terlebih dahulu di menu 'Upload Dataset'!")
@@ -1184,7 +1179,7 @@ def data_cleaning_section():
     """)
     
     # Show data before cleaning
-    st.subheader("📊 Data Sebelum Cleaning")
+    st.subheader("Data Sebelum Cleaning")
     
     # Convert scores for visualization
     def get_score_val(x):
@@ -1226,10 +1221,10 @@ def data_cleaning_section():
             st.session_state.df_clean = df_clean
             
             if df_clean is not None and len(df_clean) > 0:
-                st.success("✅ Data cleaning selesai!")
+                st.success("ata cleaning selesai!")
                 
                 # Show cleaning results
-                st.subheader("📊 Hasil Data Cleaning")
+                st.subheader("Hasil Data Cleaning")
                 
                 col1, col2 = st.columns(2)
                 
@@ -1237,7 +1232,6 @@ def data_cleaning_section():
                     st.markdown("<div class='card'>", unsafe_allow_html=True)
                     st.markdown("**Sebelum Cleaning:**")
                     st.write(f"- Jumlah data: {len(df)}")
-                    st.write(f"- Data duplikat: {duplicates}")
                     st.write(f"- Missing values: {missing}")
                     if 'Usage_Intensity_Score' in df.columns:
                         st.write(f"- Skor tidak valid: {invalid_scores}")
@@ -1249,7 +1243,6 @@ def data_cleaning_section():
                     st.markdown("<div class='card success-card'>", unsafe_allow_html=True)
                     st.markdown("**Setelah Cleaning:**")
                     st.write(f"- Jumlah data: {len(df_clean)}")
-                    st.write(f"- Data duplikat: {df_clean.duplicated().sum()}")
                     st.write(f"- Missing values: {df_clean.isnull().sum().sum()}")
                     if 'Usage_Intensity_Score' in df_clean.columns:
                         st.write(f"- Skor tidak valid: 0")
@@ -1257,7 +1250,7 @@ def data_cleaning_section():
                     st.markdown("</div>", unsafe_allow_html=True)
                 
                 # Show cleaned data with classification
-                st.subheader("📋 Data Setelah Cleaning dengan Klasifikasi")
+                st.subheader(" Data Setelah Cleaning dengan Klasifikasi")
                 
                 # Add classification to cleaned data
                 kb = KnowledgeBaseSystem()
@@ -1301,12 +1294,12 @@ def data_cleaning_section():
                 st.error("Data cleaning gagal menghasilkan data yang valid")
     
     elif st.session_state.df_clean is not None:
-        st.success("✅ Data sudah dibersihkan sebelumnya!")
+        st.success("Data sudah dibersihkan sebelumnya!")
         
         df_clean = st.session_state.df_clean
         
         # Show cleaned data
-        st.subheader("📋 Data Setelah Cleaning")
+        st.subheader("Data Setelah Cleaning")
         
         # Add classification to cleaned data
         kb = KnowledgeBaseSystem()
@@ -1343,7 +1336,7 @@ def data_cleaning_section():
                 st.metric("Pengguna Tinggi", high_users)
         
         # Option to re-run cleaning
-        if st.button("🔄 Jalankan Ulang Data Cleaning", use_container_width=True):
+        if st.button("Jalankan Ulang Data Cleaning", use_container_width=True):
             st.session_state.df_clean = None
             st.rerun()
 
@@ -1433,7 +1426,7 @@ def data_processing_section():
                 
                 # Show target distribution
                 if 'Usage_Level' in df_encoded.columns:
-                    st.subheader("🎯 Distribusi Target (Usage Level)")
+                    st.subheader("Distribusi Target (Usage Level)")
                     level_counts = df_encoded['Usage_Level'].value_counts()
                     
                     # Create visualization
@@ -1473,7 +1466,7 @@ def data_processing_section():
 
 def model_training_section():
     """Model training section"""
-    st.header("🤖 Model Training - Random Forest")
+    st.header("Model Training - Random Forest")
     
     if 'processed_data' not in st.session_state:
         st.warning("Harap proses data terlebih dahulu di menu Data Processing!")
@@ -1481,10 +1474,6 @@ def model_training_section():
     
     st.info("""
     **Algoritma Random Forest untuk Klasifikasi Penggunaan AI:**
-    - Ensemble learning method untuk klasifikasi 3 level
-    - Multiple decision trees untuk meningkatkan akurasi
-    - Bagging technique untuk mengurangi overfitting
-    - Robust terhadap data noise dan outlier
     """)
     
     # Model parameters
@@ -1499,7 +1488,7 @@ def model_training_section():
         min_samples_split = st.slider("Min Samples Split", 2, 10, 5)
         min_samples_leaf = st.slider("Min Samples Leaf", 1, 5, 2)
     
-    if st.button("🎯 Train Model", type="primary", use_container_width=True):
+    if st.button("Train Model", type="primary", use_container_width=True):
         with st.spinner("Melatih model Random Forest..."):
             # Train model
             X = st.session_state.processed_data['X']
@@ -1552,7 +1541,7 @@ def model_training_section():
                 st.metric("Max Depth", max_depth)
             
             # Feature importance
-            st.subheader("📊 Feature Importance")
+            st.subheader(" Feature Importance")
             
             feature_names = st.session_state.processed_data['features']
             importances = model.feature_importances_
@@ -1573,7 +1562,7 @@ def model_training_section():
 
 def model_evaluation_section():
     """Model evaluation section"""
-    st.header("📈 Evaluasi Model")
+    st.header(" Evaluasi Model")
     
     if 'model' not in st.session_state:
         st.warning("Harap train model terlebih dahulu!")
@@ -1616,7 +1605,7 @@ def model_evaluation_section():
         }
     
     # Display metrics
-    st.subheader("📊 Performa Model")
+    st.subheader(" Performa Model")
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -1632,7 +1621,7 @@ def model_evaluation_section():
         st.metric("F1-Score", f"{f1:.2%}")
     
     # Classification report
-    st.subheader("📋 Classification Report Detail")
+    st.subheader(" Classification Report Detail")
     
     # Create a styled dataframe
     if isinstance(report, dict) and 'RENDAH' in report:
@@ -1706,7 +1695,7 @@ def recommendations_section():
         summary = results['summary']
         
         # Display summary
-        st.subheader("📊 Ringkasan Analisis")
+        st.subheader(" Ringkasan Analisis")
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -1744,10 +1733,10 @@ def recommendations_section():
         st.plotly_chart(fig, use_container_width=True)
         
         # Display detailed recommendations by category
-        st.subheader("📋 Detail Rekomendasi per Kategori")
+        st.subheader("Detail Rekomendasi per Kategori")
         
         # Create tabs for each category
-        tab1, tab2, tab3 = st.tabs(["🟢 RENDAH", "🟡 SEDANG", "🔴 TINGGI"])
+        tab1, tab2, tab3 = st.tabs(["RENDAH", "🟡 SEDANG", "🔴 TINGGI"])
         
         # Filter recommendations by category
         rendah_rec = [r for r in results['recommendations'] if r['classification'] == 'RENDAH']
@@ -1756,7 +1745,7 @@ def recommendations_section():
         
         with tab1:
             if rendah_rec:
-                st.markdown(f"### 🟢 Level RENDAH ({len(rendah_rec)} mahasiswa)")
+                st.markdown(f"###  Level RENDAH ({len(rendah_rec)} mahasiswa)")
                 for rec in rendah_rec[:5]:  # Show first 5
                     with st.expander(f"{rec['student_name']} - {rec['jurusan']}"):
                         st.write(f"**Skor:** {rec['usage_score']}")
@@ -1771,7 +1760,7 @@ def recommendations_section():
         
         with tab2:
             if sedang_rec:
-                st.markdown(f"### 🟡 Level SEDANG ({len(sedang_rec)} mahasiswa)")
+                st.markdown(f"###  Level SEDANG ({len(sedang_rec)} mahasiswa)")
                 for rec in sedang_rec[:5]:  # Show first 5
                     with st.expander(f"{rec['student_name']} - {rec['jurusan']}"):
                         st.write(f"**Skor:** {rec['usage_score']}")
@@ -1786,7 +1775,7 @@ def recommendations_section():
         
         with tab3:
             if tinggi_rec:
-                st.markdown(f"### 🔴 Level TINGGI ({len(tinggi_rec)} mahasiswa)")
+                st.markdown(f"###  Level TINGGI ({len(tinggi_rec)} mahasiswa)")
                 for rec in tinggi_rec[:5]:  # Show first 5
                     with st.expander(f"{rec['student_name']} - {rec['jurusan']}"):
                         st.write(f"**Skor:** {rec['usage_score']}")
@@ -1800,9 +1789,9 @@ def recommendations_section():
                 st.info("Tidak ada mahasiswa dengan level TINGGI")
         
         # Export options
-        st.subheader("📥 Export Hasil")
+        st.subheader("Export Hasil")
         
-        if st.button("💾 Export ke CSV", use_container_width=True):
+        if st.button("xport ke CSV", use_container_width=True):
             # Create export dataframe
             export_data = []
             for rec in results['recommendations']:
@@ -1907,13 +1896,13 @@ def analytics_dashboard_section():
 
 def mahasiswa_dashboard():
     """Dashboard untuk Mahasiswa"""
-    st.markdown(f"<h1 class='main-header'>👨‍🎓 Dashboard Mahasiswa</h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 class='main-header'> Dashboard Mahasiswa</h1>", unsafe_allow_html=True)
     
     student_name = st.session_state.get('student_name', '')
     
     if student_name:
         st.markdown(f"<div class='card'>", unsafe_allow_html=True)
-        st.markdown(f"### 👋 Selamat datang, **{student_name}**!")
+        st.markdown(f"###  Selamat datang, **{student_name}**!")
         st.markdown("Di sini Anda dapat melihat hasil analisis penggunaan AI Anda berdasarkan self-report.")
         st.markdown("</div>", unsafe_allow_html=True)
         
@@ -1944,7 +1933,7 @@ def mahasiswa_dashboard():
                 
                 with col1:
                     st.markdown("<div class='card'>", unsafe_allow_html=True)
-                    st.markdown("### 📋 Profil Akademik")
+                    st.markdown("###  Profil Akademik")
                     st.markdown(f"**Nama:** {student['Nama']}")
                     if 'Studi_Jurusan' in student:
                         st.markdown(f"**Jurusan:** {student['Studi_Jurusan']}")
@@ -1973,7 +1962,7 @@ def mahasiswa_dashboard():
                     st.markdown(f"**{recommendation['icon']} Klasifikasi:** {classification}")
                     st.markdown(f"**🏷️ Label:** {recommendation['label']}")
                     if 'monitoring_level' in recommendation:
-                        st.markdown(f"**📊 Level Monitoring:** {recommendation['monitoring_level']}")
+                        st.markdown(f"** Level Monitoring:** {recommendation['monitoring_level']}")
                     
                     # Show score interpretation
                     if 'frequency_interpretation' in recommendation:
@@ -1986,7 +1975,7 @@ def mahasiswa_dashboard():
                 
                 # Display recommendations
                 st.markdown("<div class='card'>", unsafe_allow_html=True)
-                st.markdown("### 📝 Rekomendasi untuk Anda")
+                st.markdown("###  Rekomendasi untuk Anda")
                 
                 if 'details' in recommendation:
                     st.markdown("**Detail Rekomendasi:**")
@@ -2020,14 +2009,14 @@ def mahasiswa_dashboard():
     
     # Logout button
     st.sidebar.markdown("---")
-    if st.sidebar.button("🚪 Logout", use_container_width=True):
+    if st.sidebar.button("Logout", use_container_width=True):
         st.session_state.authenticated = False
         st.session_state.user_role = None
         st.rerun()
 
 def guru_dashboard():
-    """Dashboard untuk Guru/Dosen"""
-    st.markdown("<h1 class='main-header'>🧑‍🏫 Dashboard Guru/Dosen</h1>", unsafe_allow_html=True)
+    """Dashboard untuk Guru"""
+    st.markdown("<h1 class='main-header'> Dashboard Guru</h1>", unsafe_allow_html=True)
     
     # Initialize knowledge base
     if st.session_state.knowledge_base is None:
@@ -2039,9 +2028,9 @@ def guru_dashboard():
         st.markdown("### 📊 Menu Analisis")
         menu = st.radio(
             "Pilih Menu:",
-            ["📁 Upload Dataset", "📋 Interpretasi Skor", "🧹 Data Cleaning", 
-             "🔧 Data Processing", "🤖 Model Training", "📈 Evaluasi Model", 
-             "🎯 Rekomendasi", "📊 Dashboard Analitik"]
+            [" Upload Dataset", " Interpretasi Skor", " Data Cleaning", 
+             "Data Processing", " Model Training", " Evaluasi Model", 
+             " Rekomendasi", " Dashboard Analitik"]
         )
         st.markdown("</div>", unsafe_allow_html=True)
         
@@ -2063,18 +2052,18 @@ def guru_dashboard():
         st.markdown("### 📈 Status Data")
         
         if st.session_state.df is not None:
-            st.success("✅ Data tersedia")
+            st.success("Data tersedia")
             if st.session_state.df_clean is not None:
-                st.success("✅ Data sudah dibersihkan")
+                st.success("Data sudah dibersihkan")
             else:
-                st.warning("⚠️ Data belum dibersihkan")
+                st.warning("Data belum dibersihkan")
             
             if st.session_state.model is not None:
-                st.success("✅ Model sudah dilatih")
+                st.success("Model sudah dilatih")
             else:
                 st.info("ℹ️ Model belum dilatih")
         else:
-            st.error("❌ Data belum dimuat")
+            st.error("Data belum dimuat")
         st.markdown("</div>", unsafe_allow_html=True)
         
         # Logout button
@@ -2084,21 +2073,21 @@ def guru_dashboard():
             st.rerun()
     
     # Main content based on menu
-    if menu == "📁 Upload Dataset":
+    if menu == "Upload Dataset":
         upload_dataset_section()
-    elif menu == "📋 Interpretasi Skor":
+    elif menu == "Interpretasi Skor":
         score_interpretation_section()
-    elif menu == "🧹 Data Cleaning":
+    elif menu == "Data Cleaning":
         data_cleaning_section()
-    elif menu == "🔧 Data Processing":
+    elif menu == "Data Processing":
         data_processing_section()
-    elif menu == "🤖 Model Training":
+    elif menu == "Model Training":
         model_training_section()
-    elif menu == "📈 Evaluasi Model":
+    elif menu == "Evaluasi Model":
         model_evaluation_section()
-    elif menu == "🎯 Rekomendasi":
+    elif menu == "Rekomendasi":
         recommendations_section()
-    elif menu == "📊 Dashboard Analitik":
+    elif menu == "Dashboard Analitik":
         analytics_dashboard_section()
 
 def main():
