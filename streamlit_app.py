@@ -778,7 +778,7 @@ def show_score_interpretation_table():
 
 def login_page():
     """Halaman login"""
-    st.markdown("<h1 class='main-header'>Sistem Analisis Penggunaan AI Mahasiswa</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 class='main-header'>🔐 Sistem Analisis Penggunaan AI Mahasiswa</h1>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
     
