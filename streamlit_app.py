@@ -825,12 +825,7 @@ def login_page():
         - **Sedang (4-7):** 6-20 kali/minggu  
         - **Tinggi (8-10+):** >20 kali/minggu
         
-        **Format Dataset:**
-        - File CSV dengan kolom: Nama, Studi_Jurusan, Semester, AI_Tools, Trust_Level, Usage_Intensity_Score
-        - Usage_Intensity_Score: Skala 1-10 (10+ = 10)
-        - Pemisah: titik koma (;) atau koma (,)
-        """)
-        st.markdown("</div>", unsafe_allow_html=True)
+        
 
 def upload_dataset_section():
     """Section untuk upload dataset"""
