@@ -21,7 +21,7 @@ import csv
 
 # Set page configuration
 st.set_page_config(
-    page_title="Sistem Analisis Penggunaan AI Mahasiswa",
+    
     layout="wide"
 )
 
