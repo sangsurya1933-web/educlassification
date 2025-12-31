@@ -44,6 +44,8 @@ def init_session_state():
         st.session_state.y_test = None
     if 'results' not in st.session_state:
         st.session_state.results = None
+    if 'predictions_df' not in st.session_state:
+        st.session_state.predictions_df = None
 
 init_session_state()
 
@@ -121,20 +123,27 @@ def load_data(uploaded_file=None):
         if st.session_state.original_data is not None:
             return st.session_state.original_data.copy()
         else:
-            # Create sample data from the content provided
-            sample_data = """Nama;Studi_Jurusan;Semester;AI_Tools;Trust_Level;Usage_Intensity_Score
+            # Create sample data
+            try:
+                # Try to read from file if it exists
+                if os.path.exists("Dataset_Klasifikasi_Pengguna_AI_Mahasiswa_UMMgl_PAKE.csv"):
+                    df = pd.read_csv("Dataset_Klasifikasi_Pengguna_AI_Mahasiswa_UMMgl_PAKE.csv", sep=';')
+                else:
+                    # Create minimal sample data
+                    sample_data = """Nama;Studi_Jurusan;Semester;AI_Tools;Trust_Level;Usage_Intensity_Score
 Althaf Rayyan Putra;Teknologi Informasi;7;Gemini;4;8
 Ayesha Kinanti;Teknologi Informasi;3;Gemini;4;9
-Salsabila Nurfadila;Teknik Informatika;1;Gemini;5;3
-Anindya Safira;Teknik Informatika;5;Gemini;4;6
-Iqbal Ramadhan;Farmasi;1;Gemini;5;10
-Muhammad Rizky Pratama;Teknologi Informasi;5;Gemini;4;4
-Fikri Alfarizi;Teknologi Informasi;1;ChatGPT;4;7
-Citra Maharani;Keperawatan;5;Multiple;4;2
-Zidan Harits;Farmasi;7;Gemini;4;4"""
-            
-            df = pd.read_csv(pd.compat.StringIO(sample_data), sep=';')
-            return df
+Salsabila Nurfadila;Teknik Informatika;1;Gemini;5;3"""
+                    df = pd.read_csv(pd.compat.StringIO(sample_data), sep=';')
+                return df
+            except:
+                # Create minimal sample data
+                sample_data = """Nama;Studi_Jurusan;Semester;AI_Tools;Trust_Level;Usage_Intensity_Score
+Althaf Rayyan Putra;Teknologi Informasi;7;Gemini;4;8
+Ayesha Kinanti;Teknologi Informasi;3;Gemini;4;9
+Salsabila Nurfadila;Teknik Informatika;1;Gemini;5;3"""
+                df = pd.read_csv(pd.compat.StringIO(sample_data), sep=';')
+                return df
 
 def clean_data(df):
     st.subheader("📊 Data Cleaning")
@@ -166,15 +175,13 @@ def clean_data(df):
     key_cols = [col for col in key_cols if col in df_cleaned.columns]
     
     if key_cols:
+        before_rows = len(df_cleaned)
         df_cleaned = df_cleaned.dropna(subset=key_cols)
+        after_rows = len(df_cleaned)
+        st.write(f"Baris setelah cleaning: {before_rows} → {after_rows}")
     
     st.write("**Data Setelah Cleaning:**")
     st.dataframe(df_cleaned.head(), use_container_width=True)
-    
-    st.write(f"**Informasi Dataset:**")
-    st.write(f"- Jumlah baris: {len(df_cleaned)}")
-    st.write(f"- Jumlah kolom: {len(df_cleaned.columns)}")
-    st.write(f"- Kolom: {', '.join(df_cleaned.columns.tolist())}")
     
     return df_cleaned
 
@@ -184,7 +191,7 @@ def encode_categorical_data(df):
     # Identifikasi kolom kategorikal
     categorical_cols = []
     for col in df.columns:
-        if col != 'Nama' and df[col].dtype == 'object':
+        if col != 'Nama' and col != 'Usage_Intensity_Score' and df[col].dtype == 'object':
             categorical_cols.append(col)
     
     if not categorical_cols:
@@ -235,7 +242,10 @@ def prepare_features_target(df):
         )
         
         # Drop rows with NaN in target
+        before_rows = len(df_prepared)
         df_prepared = df_prepared.dropna(subset=['AI_Usage_Class'])
+        after_rows = len(df_prepared)
+        st.write(f"Baris setelah menghapus target NaN: {before_rows} → {after_rows}")
     else:
         st.error("Kolom 'Usage_Intensity_Score' tidak ditemukan!")
         return None, None, df
@@ -258,14 +268,6 @@ def prepare_features_target(df):
     st.write("**Distribusi Kelas Target:**")
     class_dist = y.value_counts()
     st.bar_chart(class_dist)
-    
-    # Tampilkan tabel distribusi
-    dist_df = pd.DataFrame({
-        'Kelas': class_dist.index,
-        'Jumlah': class_dist.values,
-        'Persentase': (class_dist.values / len(y) * 100).round(2)
-    })
-    st.dataframe(dist_df, use_container_width=True)
     
     return X, y, df_prepared
 
@@ -356,20 +358,6 @@ def train_random_forest(X_train, X_test, y_train, y_test):
                 # Display feature importance table
                 st.dataframe(feature_importance, use_container_width=True)
                 
-                # Classification Report
-                st.write("### 📋 Classification Report")
-                report_df = pd.DataFrame(report).transpose()
-                st.dataframe(report_df, use_container_width=True)
-                
-                # Confusion Matrix
-                st.write("### 🎯 Confusion Matrix")
-                from sklearn.metrics import confusion_matrix
-                cm = confusion_matrix(y_test, y_pred, labels=['rendah', 'sedang', 'tinggi'])
-                cm_df = pd.DataFrame(cm, 
-                                    index=['Aktual: rendah', 'Aktual: sedang', 'Aktual: tinggi'],
-                                    columns=['Prediksi: rendah', 'Prediksi: sedang', 'Prediksi: tinggi'])
-                st.dataframe(cm_df, use_container_width=True)
-                
                 return model
                 
             except Exception as e:
@@ -401,6 +389,81 @@ def get_recommendation(usage_class, trust_level, usage_score):
     
     return list(set(recommendations))[:4]  # Ambil 4 rekomendasi unik
 
+def generate_predictions_for_all_data():
+    """Generate predictions for all data and store in session state"""
+    if st.session_state.model is None or st.session_state.encoded_data is None:
+        return None
+    
+    try:
+        # Prepare data for prediction
+        predict_data = st.session_state.encoded_data.copy()
+        
+        # Prepare features
+        feature_cols = [col for col in ['Studi_Jurusan', 'Semester', 'AI_Tools', 'Trust_Level'] 
+                       if col in predict_data.columns]
+        
+        if not feature_cols:
+            st.error("Fitur tidak ditemukan untuk prediksi!")
+            return None
+        
+        # Get predictions
+        X_all = predict_data[feature_cols]
+        predictions = st.session_state.model.predict(X_all)
+        
+        # Create results dataframe
+        if st.session_state.original_data is not None:
+            results_df = st.session_state.original_data.copy()
+        else:
+            results_df = st.session_state.cleaned_data.copy()
+        
+        # Reset index to ensure alignment
+        results_df = results_df.reset_index(drop=True)
+        
+        # Add predictions
+        results_df['Klasifikasi_Penggunaan_AI'] = predictions
+        
+        # Add recommendations
+        recommendations = []
+        for idx in range(len(results_df)):
+            usage_class = predictions[idx]
+            
+            # Get trust level
+            trust_level = 3
+            if 'Trust_Level' in results_df.columns and idx < len(results_df):
+                try:
+                    trust_val = results_df.iloc[idx]['Trust_Level']
+                    if pd.notna(trust_val):
+                        trust_level = float(trust_val)
+                except:
+                    trust_level = 3
+            
+            # Get usage score
+            usage_score = 5
+            if 'Usage_Intensity_Score' in results_df.columns and idx < len(results_df):
+                try:
+                    score_val = results_df.iloc[idx]['Usage_Intensity_Score']
+                    if pd.notna(score_val):
+                        if str(score_val) == '10+':
+                            usage_score = 10
+                        else:
+                            usage_score = float(score_val)
+                except:
+                    usage_score = 5
+            
+            # Get recommendations
+            recs = get_recommendation(usage_class, trust_level, usage_score)
+            recommendations.append(", ".join(recs))
+        
+        results_df['Rekomendasi'] = recommendations
+        
+        # Store in session state
+        st.session_state.predictions_df = results_df
+        return results_df
+        
+    except Exception as e:
+        st.error(f"Error generating predictions: {str(e)}")
+        return None
+
 def evaluation_recommendation_page():
     st.title("📈 Evaluasi & Rekomendasi")
     st.markdown("---")
@@ -409,8 +472,15 @@ def evaluation_recommendation_page():
         st.warning("Silakan train model terlebih dahulu di menu 'Uji dengan Random Forest'")
         return
     
-    if st.session_state.cleaned_data is None:
-        st.warning("Data tidak tersedia. Silakan lakukan preprocessing data terlebih dahulu.")
+    # Generate predictions if not already done
+    if st.session_state.predictions_df is None:
+        with st.spinner("Membuat prediksi untuk semua data..."):
+            predictions_df = generate_predictions_for_all_data()
+    else:
+        predictions_df = st.session_state.predictions_df
+    
+    if predictions_df is None:
+        st.error("Gagal membuat prediksi. Silakan coba lagi.")
         return
     
     # Tampilkan evaluasi model
@@ -426,143 +496,84 @@ def evaluation_recommendation_page():
             st.metric("Parameter Trees", results['model_params']['n_estimators'])
         with col3:
             st.metric("Kedalaman", results['model_params']['max_depth'])
+        
+        # Classification Report
+        st.write("### 📋 Classification Report")
+        report_df = pd.DataFrame(results['report']).transpose()
+        st.dataframe(report_df, use_container_width=True)
+        
+        # Confusion Matrix
+        st.write("### 🎯 Confusion Matrix")
+        cm = confusion_matrix(results['y_test'], results['y_pred'], labels=['rendah', 'sedang', 'tinggi'])
+        cm_df = pd.DataFrame(cm, 
+                            index=['Aktual: rendah', 'Aktual: sedang', 'Aktual: tinggi'],
+                            columns=['Prediksi: rendah', 'Prediksi: sedang', 'Prediksi: tinggi'])
+        st.dataframe(cm_df, use_container_width=True)
     
-    # Prediksi untuk semua data
+    # Tampilkan prediksi dan rekomendasi
     st.subheader("🎯 Prediksi & Rekomendasi untuk Semua Mahasiswa")
     
-    # Gunakan data asli untuk tampilan
-    if st.session_state.original_data is not None:
-        display_data = st.session_state.original_data.copy()
-    else:
-        display_data = st.session_state.cleaned_data.copy()
+    # Filter columns for display
+    display_cols = ['Nama']
+    if 'Studi_Jurusan' in predictions_df.columns:
+        display_cols.append('Studi_Jurusan')
+    if 'Semester' in predictions_df.columns:
+        display_cols.append('Semester')
+    if 'AI_Tools' in predictions_df.columns:
+        display_cols.append('AI_Tools')
+    if 'Trust_Level' in predictions_df.columns:
+        display_cols.append('Trust_Level')
+    if 'Usage_Intensity_Score' in predictions_df.columns:
+        display_cols.append('Usage_Intensity_Score')
     
-    # Gunakan data encoded untuk prediksi
-    if st.session_state.encoded_data is not None:
-        predict_data = st.session_state.encoded_data.copy()
-    else:
-        # Encode jika belum diencode
-        predict_data, _ = encode_categorical_data(st.session_state.cleaned_data.copy())
+    display_cols.extend(['Klasifikasi_Penggunaan_AI', 'Rekomendasi'])
     
-    # Siapkan fitur untuk prediksi
-    feature_cols = [col for col in ['Studi_Jurusan', 'Semester', 'AI_Tools', 'Trust_Level'] 
-                   if col in predict_data.columns]
+    # Tampilkan tabel
+    st.dataframe(predictions_df[display_cols], use_container_width=True, height=400)
     
-    if not feature_cols:
-        st.error("Fitur yang diperlukan tidak ditemukan untuk prediksi!")
-        return
+    # Statistik klasifikasi
+    st.subheader("📊 Statistik Klasifikasi")
     
-    # Pastikan semua fitur ada di display_data untuk rekomendasi
-    missing_in_display = [col for col in feature_cols if col not in display_data.columns]
-    for col in missing_in_display:
-        if col in predict_data.columns:
-            display_data[col] = predict_data[col]
+    class_counts = predictions_df['Klasifikasi_Penggunaan_AI'].value_counts()
     
-    # Lakukan prediksi
-    try:
-        X_all = predict_data[feature_cols]
-        predictions = st.session_state.model.predict(X_all)
-        
-        # Tambahkan hasil ke display_data
-        display_data['Klasifikasi_Penggunaan_AI'] = predictions
-        
-        # Tambahkan rekomendasi
-        recommendations = []
-        for idx, row in display_data.iterrows():
-            usage_class = predictions[idx]
-            
-            # Get trust level
-            trust_level = 3  # default
-            if 'Trust_Level' in row:
-                try:
-                    trust_level = float(row['Trust_Level'])
-                except:
-                    trust_level = 3
-            
-            # Get usage score
-            usage_score = 5  # default
-            if 'Usage_Intensity_Score' in row:
-                try:
-                    score_str = str(row['Usage_Intensity_Score'])
-                    if score_str == '10+':
-                        usage_score = 10
-                    else:
-                        usage_score = float(score_str)
-                except:
-                    usage_score = 5
-            
-            # Get recommendations
-            recs = get_recommendation(usage_class, trust_level, usage_score)
-            recommendations.append(", ".join(recs))
-        
-        display_data['Rekomendasi'] = recommendations
-        
-        # Tampilkan hasil
-        st.write(f"**Total Mahasiswa:** {len(display_data)}")
-        
-        # Tampilkan tabel dengan hasil
-        display_cols = ['Nama']
-        if 'Studi_Jurusan' in display_data.columns:
-            display_cols.append('Studi_Jurusan')
-        if 'Semester' in display_data.columns:
-            display_cols.append('Semester')
-        if 'AI_Tools' in display_data.columns:
-            display_cols.append('AI_Tools')
-        if 'Trust_Level' in display_data.columns:
-            display_cols.append('Trust_Level')
-        if 'Usage_Intensity_Score' in display_data.columns:
-            display_cols.append('Usage_Intensity_Score')
-        
-        display_cols.extend(['Klasifikasi_Penggunaan_AI', 'Rekomendasi'])
-        
-        st.dataframe(display_data[display_cols], use_container_width=True, height=400)
-        
-        # Statistik klasifikasi
-        st.subheader("📊 Statistik Klasifikasi")
-        
-        class_counts = display_data['Klasifikasi_Penggunaan_AI'].value_counts()
-        
-        col1, col2, col3 = st.columns(3)
-        colors = {'rendah': 'red', 'sedang': 'orange', 'tinggi': 'green'}
-        
-        with col1:
-            if 'rendah' in class_counts:
-                count = class_counts['rendah']
-                percentage = (count / len(display_data) * 100)
-                st.metric("Rendah", f"{count} ({percentage:.1f}%)")
-            else:
-                st.metric("Rendah", "0")
-        
-        with col2:
-            if 'sedang' in class_counts:
-                count = class_counts['sedang']
-                percentage = (count / len(display_data) * 100)
-                st.metric("Sedang", f"{count} ({percentage:.1f}%)")
-            else:
-                st.metric("Sedang", "0")
-        
-        with col3:
-            if 'tinggi' in class_counts:
-                count = class_counts['tinggi']
-                percentage = (count / len(display_data) * 100)
-                st.metric("Tinggi", f"{count} ({percentage:.1f}%)")
-            else:
-                st.metric("Tinggi", "0")
-        
-        # Chart distribusi
-        st.bar_chart(class_counts)
-        
-        # Tombol download
-        csv = display_data.to_csv(index=False, sep=';').encode('utf-8')
-        st.download_button(
-            label="📥 Download Hasil Analisis (CSV)",
-            data=csv,
-            file_name=f"hasil_analisis_ai_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
-        
-    except Exception as e:
-        st.error(f"Error dalam prediksi: {str(e)}")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if 'rendah' in class_counts:
+            count = class_counts['rendah']
+            percentage = (count / len(predictions_df) * 100)
+            st.metric("Rendah", f"{count} ({percentage:.1f}%)")
+        else:
+            st.metric("Rendah", "0")
+    
+    with col2:
+        if 'sedang' in class_counts:
+            count = class_counts['sedang']
+            percentage = (count / len(predictions_df) * 100)
+            st.metric("Sedang", f"{count} ({percentage:.1f}%)")
+        else:
+            st.metric("Sedang", "0")
+    
+    with col3:
+        if 'tinggi' in class_counts:
+            count = class_counts['tinggi']
+            percentage = (count / len(predictions_df) * 100)
+            st.metric("Tinggi", f"{count} ({percentage:.1f}%)")
+        else:
+            st.metric("Tinggi", "0")
+    
+    # Chart distribusi
+    st.bar_chart(class_counts)
+    
+    # Tombol download
+    csv = predictions_df.to_csv(index=False, sep=';').encode('utf-8')
+    st.download_button(
+        label="📥 Download Hasil Analisis (CSV)",
+        data=csv,
+        file_name=f"hasil_analisis_ai_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
 
 def student_dashboard():
     st.title("👨‍🎓 Dashboard Mahasiswa")
@@ -575,118 +586,61 @@ def student_dashboard():
         st.warning("Model belum dilatih. Silakan guru/dosen melakukan training model terlebih dahulu.")
         return
     
-    # Cari data mahasiswa berdasarkan nama (partial match)
-    if st.session_state.original_data is not None:
-        search_data = st.session_state.original_data.copy()
-    elif st.session_state.cleaned_data is not None:
-        search_data = st.session_state.cleaned_data.copy()
-    else:
-        st.warning("Data tidak tersedia.")
-        return
-    
-    # Cari mahasiswa dengan nama yang mirip
-    student_matches = search_data[search_data['Nama'].str.contains(student_name, case=False, na=False)]
-    
-    if student_matches.empty:
-        st.warning(f"Data tidak ditemukan untuk mahasiswa: {student_name}")
-        st.write("**Mahasiswa yang tersedia dalam dataset:**")
-        st.dataframe(search_data[['Nama', 'Studi_Jurusan']].head(10), use_container_width=True)
-        return
-    
-    # Ambil data pertama yang cocok
-    student_row = student_matches.iloc[0]
-    
-    # Prepare data for prediction
-    if st.session_state.encoded_data is not None:
-        predict_data = st.session_state.encoded_data.copy()
-        # Find the corresponding encoded row
-        encoded_idx = predict_data.index[predict_data.index.isin(student_matches.index)]
-        if len(encoded_idx) > 0:
-            encoded_row = predict_data.loc[encoded_idx[0]]
-        else:
-            # Encode the student data
-            temp_df = pd.DataFrame([student_row])
-            encoded_temp, _ = encode_categorical_data(temp_df)
-            encoded_row = encoded_temp.iloc[0]
-    else:
-        # Encode the student data
-        temp_df = pd.DataFrame([student_row])
-        encoded_temp, _ = encode_categorical_data(temp_df)
-        encoded_row = encoded_temp.iloc[0]
-    
-    # Prepare features for prediction
-    feature_cols = [col for col in ['Studi_Jurusan', 'Semester', 'AI_Tools', 'Trust_Level'] 
-                   if col in encoded_row.index]
-    
-    if not feature_cols:
-        st.error("Tidak dapat melakukan prediksi: fitur tidak tersedia")
-        return
-    
-    # Create feature vector
-    X_student = pd.DataFrame([encoded_row[feature_cols]])
-    
-    # Predict
-    try:
-        prediction = st.session_state.model.predict(X_student)[0]
+    # Cari data mahasiswa berdasarkan nama
+    if st.session_state.predictions_df is not None:
+        predictions_df = st.session_state.predictions_df
+        student_matches = predictions_df[predictions_df['Nama'].str.contains(student_name, case=False, na=False)]
         
-        # Display student info
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.info("**📋 Informasi Mahasiswa:**")
-            st.write(f"**Nama:** {student_row['Nama']}")
-            if 'Studi_Jurusan' in student_row:
-                st.write(f"**Jurusan:** {student_row['Studi_Jurusan']}")
-            if 'Semester' in student_row:
-                st.write(f"**Semester:** {student_row['Semester']}")
-            if 'AI_Tools' in student_row:
-                st.write(f"**AI Tools:** {student_row['AI_Tools']}")
-            if 'Trust_Level' in student_row:
-                st.write(f"**Tingkat Kepercayaan:** {student_row['Trust_Level']}/5")
-            if 'Usage_Intensity_Score' in student_row:
-                st.write(f"**Intensitas Penggunaan:** {student_row['Usage_Intensity_Score']}/10")
-        
-        with col2:
-            st.info("**🎯 Klasifikasi Penggunaan AI:**")
+        if not student_matches.empty:
+            # Ambil data pertama yang cocok
+            student_row = student_matches.iloc[0]
             
-            if prediction == 'rendah':
-                st.error(f"**RENDAH** ⚠️")
-                st.write("*Intensitas penggunaan AI masih perlu ditingkatkan*")
-            elif prediction == 'sedang':
-                st.warning(f"**SEDANG** 📊")
-                st.write("*Penggunaan AI sudah baik, bisa ditingkatkan lagi*")
-            else:
-                st.success(f"**TINGGI** 🚀")
-                st.write("*Penggunaan AI sudah optimal*")
-        
-        # Get recommendations
-        st.info("**💡 Rekomendasi Analisis:**")
-        
-        trust_level = 3
-        if 'Trust_Level' in student_row:
-            try:
-                trust_level = float(student_row['Trust_Level'])
-            except:
-                pass
-        
-        usage_score = 5
-        if 'Usage_Intensity_Score' in student_row:
-            try:
-                score_str = str(student_row['Usage_Intensity_Score'])
-                if score_str == '10+':
-                    usage_score = 10
-                else:
-                    usage_score = float(score_str)
-            except:
-                pass
-        
-        recommendations = get_recommendation(prediction, trust_level, usage_score)
-        
-        for i, rec in enumerate(recommendations, 1):
-            st.write(f"{i}. {rec}")
-        
-    except Exception as e:
-        st.error(f"Error dalam prediksi: {str(e)}")
+            # Display student info
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.info("**📋 Informasi Mahasiswa:**")
+                st.write(f"**Nama:** {student_row['Nama']}")
+                if 'Studi_Jurusan' in student_row:
+                    st.write(f"**Jurusan:** {student_row['Studi_Jurusan']}")
+                if 'Semester' in student_row:
+                    st.write(f"**Semester:** {student_row['Semester']}")
+                if 'AI_Tools' in student_row:
+                    st.write(f"**AI Tools:** {student_row['AI_Tools']}")
+                if 'Trust_Level' in student_row:
+                    st.write(f"**Tingkat Kepercayaan:** {student_row['Trust_Level']}/5")
+                if 'Usage_Intensity_Score' in student_row:
+                    st.write(f"**Intensitas Penggunaan:** {student_row['Usage_Intensity_Score']}/10")
+            
+            with col2:
+                st.info("**🎯 Klasifikasi Penggunaan AI:**")
+                
+                if 'Klasifikasi_Penggunaan_AI' in student_row:
+                    prediction = student_row['Klasifikasi_Penggunaan_AI']
+                    
+                    if prediction == 'rendah':
+                        st.error(f"**RENDAH** ⚠️")
+                        st.write("*Intensitas penggunaan AI masih perlu ditingkatkan*")
+                    elif prediction == 'sedang':
+                        st.warning(f"**SEDANG** 📊")
+                        st.write("*Penggunaan AI sudah baik, bisa ditingkatkan lagi*")
+                    else:
+                        st.success(f"**TINGGI** 🚀")
+                        st.write("*Penggunaan AI sudah optimal*")
+            
+            # Get recommendations
+            st.info("**💡 Rekomendasi Analisis:**")
+            
+            if 'Rekomendasi' in student_row:
+                recommendations = student_row['Rekomendasi'].split(", ")
+                for i, rec in enumerate(recommendations, 1):
+                    st.write(f"{i}. {rec}")
+        else:
+            st.warning(f"Data tidak ditemukan untuk mahasiswa: {student_name}")
+            st.write("**Mahasiswa yang tersedia dalam dataset:**")
+            st.dataframe(predictions_df[['Nama', 'Studi_Jurusan']].head(10), use_container_width=True)
+    else:
+        st.warning("Data prediksi belum tersedia. Silakan guru/dosen melakukan analisis terlebih dahulu.")
 
 def teacher_dashboard():
     st.title("👨‍🏫 Dashboard Guru/Dosen")
@@ -770,6 +724,9 @@ def teacher_dashboard():
                 st.session_state.y_train,
                 st.session_state.y_test
             )
+            # Reset predictions when model is retrained
+            if model is not None:
+                st.session_state.predictions_df = None
             
     elif menu == "Evaluasi & Rekomendasi":
         evaluation_recommendation_page()
